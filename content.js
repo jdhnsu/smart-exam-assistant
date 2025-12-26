@@ -17,26 +17,59 @@ if (!window.hasExamAssistantRunning) {
         position: fixed;
         bottom: 20px;
         right: 20px;
-        padding: 15px;
-        background: rgba(0, 0, 0, 0.8);
+        padding: 12px 16px;
+        background: rgba(0, 0, 0, 0.85);
         color: white;
         border-radius: 8px;
         z-index: 999999;
-        font-family: sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         font-size: 14px;
-        pointer-events: none;
-        transition: all 0.3s;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        backdrop-filter: blur(5px);
+        transition: all 0.3s ease;
       `;
-      div.innerText = 'AI Assistant Ready';
+      
+      const playIcon = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+      const pauseIcon = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+
+      div.innerHTML = `
+        <div id="ea-status-text" style="font-weight: 500; min-width: 150px;">AI Assistant Ready</div>
+        <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.3);"></div>
+        <div class="ea-controls" style="display: flex; gap: 8px;">
+            <button id="ea-btn-start" title="Start Auto-Answering" style="background: none; border: none; color: #67C23A; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: background 0.2s;">
+                ${playIcon}
+            </button>
+            <button id="ea-btn-pause" title="Pause Auto-Answering" style="background: none; border: none; color: #F56C6C; cursor: pointer; padding: 4px; display: none; align-items: center; justify-content: center; border-radius: 4px; transition: background 0.2s;">
+                ${pauseIcon}
+            </button>
+        </div>
+      `;
+
       document.body.appendChild(div);
       this.statusPanel = div;
+      this.statusText = div.querySelector('#ea-status-text');
+      this.btnStart = div.querySelector('#ea-btn-start');
+      this.btnPause = div.querySelector('#ea-btn-pause');
+
+      // Add hover effects
+      const addHover = (btn) => {
+          btn.onmouseenter = () => btn.style.background = 'rgba(255,255,255,0.1)';
+          btn.onmouseleave = () => btn.style.background = 'none';
+      };
+      addHover(this.btnStart);
+      addHover(this.btnPause);
+
+      this.btnStart.onclick = () => this.start();
+      this.btnPause.onclick = () => this.stop();
     }
 
     updateStatus(text, color = 'white') {
-      if (this.statusPanel) {
-        this.statusPanel.innerText = text;
-        this.statusPanel.style.color = color;
+      if (this.statusText) {
+        this.statusText.innerText = text;
+        this.statusText.style.color = color;
       }
       console.log(`[ExamAssistant] ${text}`);
     }
@@ -44,13 +77,24 @@ if (!window.hasExamAssistantRunning) {
     start() {
       if (this.isRunning) return;
       this.isRunning = true;
-      this.updateStatus("Started - Looking for questions...", "#409EFF");
+      this.updateStatus("Started", "#409EFF");
+      
+      if (this.btnStart) {
+          this.btnStart.style.display = 'none';
+          this.btnPause.style.display = 'flex';
+      }
+      
       this.processLoop();
     }
 
     stop() {
       this.isRunning = false;
-      this.updateStatus("Stopped", "#F56C6C");
+      this.updateStatus("Paused", "#F56C6C");
+      
+      if (this.btnStart) {
+          this.btnStart.style.display = 'flex';
+          this.btnPause.style.display = 'none';
+      }
     }
 
     async processLoop() {
