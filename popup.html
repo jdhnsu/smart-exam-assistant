@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { width: 300px; padding: 15px; font-family: sans-serif; }
+    .group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input, select { width: 100%; padding: 8px; box-sizing: border-box; }
+    button { width: 100%; padding: 10px; background: #409EFF; color: white; border: none; cursor: pointer; border-radius: 4px; }
+    button:hover { background: #66b1ff; }
+    button.stop { background: #F56C6C; margin-top: 5px; }
+    #status { margin-top: 10px; font-size: 12px; color: #666; text-align: center; }
+  </style>
+</head>
+<body>
+  <h3>Exam Assistant Config</h3>
+  
+  <div class="group">
+    <label>API Provider</label>
+    <select id="provider">
+      <option value="openai">OpenAI (GPT)</option>
+      <option value="gemini">Google Gemini</option>
+      <option value="qwen">Qwen (DashScope)</option>
+    </select>
+  </div>
+
+  <div class="group">
+    <label>API Key</label>
+    <input type="password" id="apiKey" placeholder="sk-...">
+  </div>
+
+  <div class="group">
+    <label>Model Name</label>
+    <input type="text" id="modelName" placeholder="gpt-4o-mini or gemini-1.5-flash">
+  </div>
+
+  <div class="group" style="display: flex; align-items: center;">
+    <input type="checkbox" id="debugMode" style="width: auto; margin-right: 10px;">
+    <label for="debugMode" style="margin: 0; font-weight: normal;">Enable Debug Mode (Verify Questions)</label>
+  </div>
+
+  <button id="saveBtn">Save Settings</button>
+  <div id="status"></div>
+  
+  <hr>
+  
+  <button id="startBtn">Start Auto-Answer</button>
+  <button id="stopBtn" class="stop">Stop</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>
