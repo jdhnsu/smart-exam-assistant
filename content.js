@@ -39,6 +39,7 @@ if (!window.hasExamAssistantRunning) {
       
       const playIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
       const pauseIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+      const nextIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>`;
       const robotIcon = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 1 0 7.5 18 2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5"/></svg>`;
 
       div.innerHTML = `
@@ -47,11 +48,14 @@ if (!window.hasExamAssistantRunning) {
         </div>
         <div id="ea-status-text" style="font-weight: 500; opacity: 0; transition: opacity 0.2s;">AI Ready</div>
         <div class="ea-controls" style="display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s;">
-            <button id="ea-btn-start" title="Start" style="background: none; border: none; color: #67C23A; cursor: pointer; padding: 2px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+            <button id="ea-btn-start" title="Get Answer" style="background: none; border: none; color: #67C23A; cursor: pointer; padding: 2px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
                 ${playIcon}
             </button>
-            <button id="ea-btn-pause" title="Pause" style="background: none; border: none; color: #F56C6C; cursor: pointer; padding: 2px; display: none; align-items: center; justify-content: center; border-radius: 4px;">
+            <button id="ea-btn-pause" title="Cancel" style="background: none; border: none; color: #F56C6C; cursor: pointer; padding: 2px; display: none; align-items: center; justify-content: center; border-radius: 4px;">
                 ${pauseIcon}
+            </button>
+            <button id="ea-btn-next" title="Next Question" style="background: none; border: none; color: #409EFF; cursor: pointer; padding: 2px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+                ${nextIcon}
             </button>
         </div>
       `;
@@ -61,6 +65,7 @@ if (!window.hasExamAssistantRunning) {
       this.statusText = div.querySelector('#ea-status-text');
       this.btnStart = div.querySelector('#ea-btn-start');
       this.btnPause = div.querySelector('#ea-btn-pause');
+      this.btnNext = div.querySelector('#ea-btn-next');
       this.controls = div.querySelector('.ea-controls');
 
       // Interaction Logic
@@ -92,6 +97,7 @@ if (!window.hasExamAssistantRunning) {
 
       this.btnStart.onclick = (e) => { e.stopPropagation(); this.start(); };
       this.btnPause.onclick = (e) => { e.stopPropagation(); this.stop(); };
+      this.btnNext.onclick = (e) => { e.stopPropagation(); this.goToNextQuestion(); };
     }
 
     updateStatus(text, color = 'white') {
@@ -139,24 +145,25 @@ if (!window.hasExamAssistantRunning) {
       // Scroll to question to ensure it's in view
       questionEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-      // 2. Check if already answered
-      if (this.isQuestionAnswered(questionEl)) {
-        this.updateStatus("Question answered. Moving to next...", "#67C23A");
-        this.goToNextQuestion();
-        setTimeout(() => this.processLoop(), 3000);
-        return;
-      }
-
+      // 2. Check if already answered - REMOVED PRE-CHECK
+      // We now force a re-fetch every time "Start" is clicked, 
+      // even if the question appears answered.
+      
       // 3. Extract Data
       this.updateStatus("Extracting question data...");
       const data = this.extractQuestionData(questionEl);
       if (!data || !data.options.length) {
         this.updateStatus("Failed to extract question/options", "red");
-        setTimeout(() => this.processLoop(), 2000);
+        this.stop(); // Stop if we can't read the question
         return;
       }
 
       // DEBUG STEP 1: Verify Question
+      // User requested to REMOVE the confirmation phase for Question Verification
+      // So we skip showQuestionVerification call entirely or make it auto-proceed?
+      // "取消 Debug: Verify Question 的 confirm 的确认阶段" -> Remove the confirm step.
+      // We will SKIP this modal and proceed directly to AI.
+      /* 
       if (await this.isDebugMode()) {
         const confirmed = await this.showQuestionVerification(data);
         if (!confirmed) {
@@ -165,6 +172,7 @@ if (!window.hasExamAssistantRunning) {
           return;
         }
       }
+      */
 
       // 4. Get Answer from AI
       try {
@@ -191,11 +199,9 @@ if (!window.hasExamAssistantRunning) {
         const success = this.selectOption(questionEl, answer);
         
         if (success) {
-          // 6. Wait and move on
-          setTimeout(() => {
-            this.goToNextQuestion();
-            setTimeout(() => this.processLoop(), 3000); 
-          }, 1000);
+          this.updateStatus("Answered. Click Next manually.", "#67C23A");
+          // Stop automatically after answering one question
+          this.stop();
         } else {
           this.updateStatus(`Could not select option ${answer}`, "red");
           this.stop();
@@ -282,31 +288,37 @@ if (!window.hasExamAssistantRunning) {
         });
     }
 
-    createModal(title, data, answer, resolve) {
+    async createModal(title, data, answer, resolve) {
       const existing = document.getElementById('ai-exam-debug-modal');
-      const existingOverlay = document.getElementById('ai-exam-debug-overlay');
       if (existing) existing.remove();
-      if (existingOverlay) existingOverlay.remove();
+      // Removed overlay logic for transparent/draggable mode
 
-      // Create Overlay for click-outside detection
-      const overlay = document.createElement('div');
-      overlay.id = 'ai-exam-debug-overlay';
-      overlay.style.cssText = `
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.3); z-index: 999999;
-        backdrop-filter: blur(2px);
-      `;
+      // Load saved position
+      const pos = await new Promise(r => chrome.storage.local.get(['debugModalPos'], res => r(res.debugModalPos || { top: '15%', right: '20px', left: 'auto' })));
 
       const modal = document.createElement('div');
       modal.id = 'ai-exam-debug-modal';
       modal.style.cssText = `
-        position: fixed; top: 15%; right: 20px; width: 350px;
-        background: white; padding: 15px; border-radius: 12px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        z-index: 1000000; max-height: 70vh; overflow-y: auto;
-        color: #333; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-size: 13px; border: 1px solid #ebeef5;
-        transform: translateY(0); transition: all 0.3s;
+        position: fixed; 
+        top: ${pos.top}; 
+        left: ${pos.left};
+        right: ${pos.right};
+        width: 350px;
+        background: rgba(255, 255, 255, 0.95); 
+        padding: 0; 
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        z-index: 1000000; 
+        max-height: 70vh; 
+        display: flex;
+        flex-direction: column;
+        color: #333; 
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 13px; 
+        border: 1px solid rgba(0,0,0,0.1);
+        backdrop-filter: blur(10px);
+        transform: translateY(0); 
+        transition: opacity 0.3s;
       `;
 
       const optionsHtml = data.options.map(o => {
@@ -328,31 +340,120 @@ if (!window.hasExamAssistantRunning) {
          </div>` : '';
 
       modal.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:8px;">
-            <h3 style="margin:0; font-size:14px; font-weight:600;">${title}</h3>
-            <span style="color:#999; font-size:11px;">Click outside to hide</span>
+        <div id="debug-header" style="padding: 12px 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; cursor: move; background: rgba(248, 249, 250, 0.8); border-radius: 12px 12px 0 0; user-select: none;">
+            <div style="display:flex; align-items:center; gap:6px;">
+                <span style="width: 8px; height: 8px; background: #409eff; border-radius: 50%;"></span>
+                <h3 style="margin:0; font-size:13px; font-weight:600;">${title}</h3>
+            </div>
+            <div style="font-size: 16px; color: #909399; cursor: pointer; padding: 0 4px;" id="debug-close">×</div>
         </div>
-        <div style="background:#f5f7fa; padding:10px; margin-bottom:10px; border-radius:6px; line-height:1.4;">
-          ${data.question}
-        </div>
-        ${answerHtml}
-        <div style="margin-bottom:15px;">
-          ${optionsHtml}
-        </div>
-        <div style="display:flex; gap:10px; justify-content:flex-end;">
-          <button id="debug-cancel" style="padding:6px 12px; background:#f56c6c; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">Stop</button>
-          <button id="debug-confirm" style="padding:6px 12px; background:#409eff; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">
-            ${answer ? 'Apply' : 'Confirm'}
-          </button>
+        
+        <div style="padding: 15px; overflow-y: auto; max-height: calc(70vh - 100px);">
+            <div style="background:#f5f7fa; padding:10px; margin-bottom:10px; border-radius:6px; line-height:1.4;">
+            ${data.question}
+            </div>
+            ${answerHtml}
+            <div style="margin-bottom:15px;">
+            ${optionsHtml}
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button id="debug-cancel" style="padding:6px 12px; background:#f56c6c; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">Stop</button>
+            <button id="debug-confirm" style="padding:6px 12px; background:#409eff; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">
+                ${answer ? 'Apply' : 'Confirm'}
+            </button>
+            </div>
         </div>
       `;
 
-      document.body.appendChild(overlay);
       document.body.appendChild(modal);
+
+      // Drag Logic
+      const header = modal.querySelector('#debug-header');
+      let isDragging = false;
+      let startX, startY, initialLeft, initialTop;
+
+      header.onmousedown = (e) => {
+          isDragging = true;
+          startX = e.clientX;
+          startY = e.clientY;
+          const rect = modal.getBoundingClientRect();
+          initialLeft = rect.left;
+          initialTop = rect.top;
+          modal.style.right = 'auto'; // Disable right positioning once dragging starts
+          modal.style.width = rect.width + 'px'; // Fix width
+      };
+
+      document.onmousemove = (e) => {
+          if (!isDragging) return;
+          e.preventDefault();
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          
+          let newLeft = initialLeft + dx;
+          let newTop = initialTop + dy;
+
+          // Boundary Check
+          const maxLeft = window.innerWidth - modal.offsetWidth;
+          const maxTop = window.innerHeight - modal.offsetHeight;
+
+          if (newLeft < 0) newLeft = 0;
+          if (newTop < 0) newTop = 0;
+          if (newLeft > maxLeft) newLeft = maxLeft;
+          if (newTop > maxTop) newTop = maxTop;
+
+          modal.style.left = newLeft + 'px';
+          modal.style.top = newTop + 'px';
+      };
+
+      document.onmouseup = () => {
+          if (isDragging) {
+              isDragging = false;
+              // Save Position
+              chrome.storage.local.set({ 
+                  debugModalPos: { 
+                      top: modal.style.top, 
+                      left: modal.style.left, 
+                      right: 'auto' 
+                  } 
+              });
+          }
+      };
+
+      // Add global click listener for "click outside to hide"
+      // We use a transparent overlay approach for this specific modal to allow interactions outside?
+      // User requested "Click non-popup area to quickly hide".
+      // Since we removed the overlay to allow background interaction, we need a document click listener.
+      
+      const outsideClickListener = (e) => {
+          if (modal && !modal.contains(e.target)) {
+              // Clicked outside
+              cleanup();
+              resolve(false);
+          }
+      };
+      
+      const keyDownListener = (e) => {
+          if (e.altKey && e.key.toLowerCase() === 't') {
+              // Alt+T pressed inside modal -> Close modal (hide)
+              cleanup();
+              resolve(false); 
+              // Note: The global listener will also toggle start/stop, 
+              // but since we resolve(false), the processLoop will likely stop anyway.
+          }
+      };
+
+      // Delay adding the listener to avoid triggering it immediately on the click that opened it
+      setTimeout(() => {
+          document.addEventListener('click', outsideClickListener);
+          document.addEventListener('keydown', keyDownListener);
+      }, 100);
 
       const cleanup = () => {
         if (document.body.contains(modal)) modal.remove();
-        if (document.body.contains(overlay)) overlay.remove();
+        document.removeEventListener('click', outsideClickListener);
+        document.removeEventListener('keydown', keyDownListener);
+        document.onmousemove = null;
+        document.onmouseup = null;
       };
 
       document.getElementById('debug-confirm').onclick = () => {
@@ -363,14 +464,13 @@ if (!window.hasExamAssistantRunning) {
       // Stop button
       document.getElementById('debug-cancel').onclick = () => {
         cleanup();
-        resolve(false); // Stop execution
+        resolve(false); 
       };
 
-      // Click outside (Overlay) -> Hide and Stop (Stealth Mode)
-      overlay.onclick = () => {
+      // Close 'x' button (treat as stop/cancel)
+      document.getElementById('debug-close').onclick = () => {
         cleanup();
-        this.updateStatus("Hidden by user interaction", "gray");
-        resolve(false); // Stop execution to be safe/stealthy
+        resolve(false);
       };
     }
 
@@ -476,6 +576,18 @@ if (!window.hasExamAssistantRunning) {
   }
 
   const assistant = new ExamAssistant();
+
+  // Global Keyboard Shortcut: Alt+T to toggle/start
+  document.addEventListener('keydown', (e) => {
+      if (e.altKey && e.key.toLowerCase() === 't') {
+          console.log("[ExamAssistant] Shortcut Alt+T triggered");
+          if (assistant.isRunning) {
+              assistant.stop();
+          } else {
+              assistant.start();
+          }
+      }
+  });
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "START_ANSWERING") {
