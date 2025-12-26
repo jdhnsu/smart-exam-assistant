@@ -17,37 +17,32 @@ if (!window.hasExamAssistantRunning) {
         position: fixed;
         bottom: 20px;
         right: 20px;
-        padding: 8px 12px;
-        background: rgba(0, 0, 0, 0.4);
+        padding: 4px 8px;
+        background: rgba(0, 0, 0, 0.2);
         color: white;
-        border-radius: 20px;
+        border-radius: 12px;
         z-index: 999999;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         font-size: 12px;
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 4px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        backdrop-filter: blur(3px);
+        backdrop-filter: blur(2px);
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         transform-origin: right bottom;
-        max-width: 40px;
+        max-width: 60px;
         overflow: hidden;
         white-space: nowrap;
-        opacity: 0.6;
+        opacity: 0.3;
       `;
       
-      const playIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
-      const pauseIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
-      const nextIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>`;
-      const robotIcon = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 1 0 7.5 18 2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5"/></svg>`;
+      const playIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+      const pauseIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+      const nextIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>`;
 
       div.innerHTML = `
-        <div class="ea-icon-wrapper" style="display: flex; align-items: center; justify-content: center; min-width: 20px;">
-            ${robotIcon}
-        </div>
-        <div id="ea-status-text" style="font-weight: 500; opacity: 0; transition: opacity 0.2s;">AI Ready</div>
-        <div class="ea-controls" style="display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s;">
+        <div class="ea-controls" style="display: flex; gap: 4px; opacity: 1; transition: opacity 0.2s;">
             <button id="ea-btn-start" title="Get Answer" style="background: none; border: none; color: #67C23A; cursor: pointer; padding: 2px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
                 ${playIcon}
             </button>
@@ -58,6 +53,7 @@ if (!window.hasExamAssistantRunning) {
                 ${nextIcon}
             </button>
         </div>
+        <div id="ea-status-text" style="font-weight: 500; opacity: 0; transition: opacity 0.2s; margin-left: 4px;">AI Ready</div>
       `;
 
       document.body.appendChild(div);
@@ -71,22 +67,22 @@ if (!window.hasExamAssistantRunning) {
       // Interaction Logic
       const expand = () => {
           div.style.maxWidth = '300px';
-          div.style.background = 'rgba(0, 0, 0, 0.85)';
+          div.style.background = 'rgba(0, 0, 0, 0.8)';
           div.style.opacity = '1';
-          div.style.padding = '12px 16px';
+          div.style.padding = '8px 12px';
           div.style.borderRadius = '8px';
           this.statusText.style.opacity = '1';
-          this.controls.style.opacity = '1';
+          // this.controls.style.opacity = '1';
       };
 
       const collapse = () => {
-          div.style.maxWidth = '42px';
-          div.style.background = 'rgba(0, 0, 0, 0.4)';
-          div.style.opacity = '0.6';
-          div.style.padding = '8px 12px';
-          div.style.borderRadius = '20px';
+          div.style.maxWidth = '60px';
+          div.style.background = 'rgba(0, 0, 0, 0.2)';
+          div.style.opacity = '0.3';
+          div.style.padding = '4px 8px';
+          div.style.borderRadius = '12px';
           this.statusText.style.opacity = '0';
-          this.controls.style.opacity = '0';
+          // this.controls.style.opacity = '0';
       };
 
       div.addEventListener('mouseenter', expand);
