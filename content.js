@@ -17,32 +17,40 @@ if (!window.hasExamAssistantRunning) {
         position: fixed;
         bottom: 20px;
         right: 20px;
-        padding: 12px 16px;
-        background: rgba(0, 0, 0, 0.85);
+        padding: 8px 12px;
+        background: rgba(0, 0, 0, 0.4);
         color: white;
-        border-radius: 8px;
+        border-radius: 20px;
         z-index: 999999;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        font-size: 14px;
+        font-size: 12px;
         display: flex;
         align-items: center;
-        gap: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        backdrop-filter: blur(5px);
-        transition: all 0.3s ease;
+        gap: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        backdrop-filter: blur(3px);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transform-origin: right bottom;
+        max-width: 40px;
+        overflow: hidden;
+        white-space: nowrap;
+        opacity: 0.6;
       `;
       
-      const playIcon = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
-      const pauseIcon = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+      const playIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+      const pauseIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+      const robotIcon = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 1 0 7.5 18 2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5"/></svg>`;
 
       div.innerHTML = `
-        <div id="ea-status-text" style="font-weight: 500; min-width: 150px;">AI Assistant Ready</div>
-        <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.3);"></div>
-        <div class="ea-controls" style="display: flex; gap: 8px;">
-            <button id="ea-btn-start" title="Start Auto-Answering" style="background: none; border: none; color: #67C23A; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: background 0.2s;">
+        <div class="ea-icon-wrapper" style="display: flex; align-items: center; justify-content: center; min-width: 20px;">
+            ${robotIcon}
+        </div>
+        <div id="ea-status-text" style="font-weight: 500; opacity: 0; transition: opacity 0.2s;">AI Ready</div>
+        <div class="ea-controls" style="display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s;">
+            <button id="ea-btn-start" title="Start" style="background: none; border: none; color: #67C23A; cursor: pointer; padding: 2px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
                 ${playIcon}
             </button>
-            <button id="ea-btn-pause" title="Pause Auto-Answering" style="background: none; border: none; color: #F56C6C; cursor: pointer; padding: 4px; display: none; align-items: center; justify-content: center; border-radius: 4px; transition: background 0.2s;">
+            <button id="ea-btn-pause" title="Pause" style="background: none; border: none; color: #F56C6C; cursor: pointer; padding: 2px; display: none; align-items: center; justify-content: center; border-radius: 4px;">
                 ${pauseIcon}
             </button>
         </div>
@@ -53,17 +61,37 @@ if (!window.hasExamAssistantRunning) {
       this.statusText = div.querySelector('#ea-status-text');
       this.btnStart = div.querySelector('#ea-btn-start');
       this.btnPause = div.querySelector('#ea-btn-pause');
+      this.controls = div.querySelector('.ea-controls');
 
-      // Add hover effects
-      const addHover = (btn) => {
-          btn.onmouseenter = () => btn.style.background = 'rgba(255,255,255,0.1)';
-          btn.onmouseleave = () => btn.style.background = 'none';
+      // Interaction Logic
+      const expand = () => {
+          div.style.maxWidth = '300px';
+          div.style.background = 'rgba(0, 0, 0, 0.85)';
+          div.style.opacity = '1';
+          div.style.padding = '12px 16px';
+          div.style.borderRadius = '8px';
+          this.statusText.style.opacity = '1';
+          this.controls.style.opacity = '1';
       };
-      addHover(this.btnStart);
-      addHover(this.btnPause);
 
-      this.btnStart.onclick = () => this.start();
-      this.btnPause.onclick = () => this.stop();
+      const collapse = () => {
+          div.style.maxWidth = '42px';
+          div.style.background = 'rgba(0, 0, 0, 0.4)';
+          div.style.opacity = '0.6';
+          div.style.padding = '8px 12px';
+          div.style.borderRadius = '20px';
+          this.statusText.style.opacity = '0';
+          this.controls.style.opacity = '0';
+      };
+
+      div.addEventListener('mouseenter', expand);
+      div.addEventListener('mouseleave', collapse);
+
+      // Keep expanded if running? No, user requested semi-hidden.
+      // But maybe flash briefly on status update?
+
+      this.btnStart.onclick = (e) => { e.stopPropagation(); this.start(); };
+      this.btnPause.onclick = (e) => { e.stopPropagation(); this.stop(); };
     }
 
     updateStatus(text, color = 'white') {
@@ -256,57 +284,93 @@ if (!window.hasExamAssistantRunning) {
 
     createModal(title, data, answer, resolve) {
       const existing = document.getElementById('ai-exam-debug-modal');
+      const existingOverlay = document.getElementById('ai-exam-debug-overlay');
       if (existing) existing.remove();
+      if (existingOverlay) existingOverlay.remove();
+
+      // Create Overlay for click-outside detection
+      const overlay = document.createElement('div');
+      overlay.id = 'ai-exam-debug-overlay';
+      overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.3); z-index: 999999;
+        backdrop-filter: blur(2px);
+      `;
 
       const modal = document.createElement('div');
       modal.id = 'ai-exam-debug-modal';
       modal.style.cssText = `
-        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.5);
-        z-index: 1000000; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;
-        color: #333; font-family: sans-serif;
+        position: fixed; top: 15%; right: 20px; width: 350px;
+        background: white; padding: 15px; border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        z-index: 1000000; max-height: 70vh; overflow-y: auto;
+        color: #333; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 13px; border: 1px solid #ebeef5;
+        transform: translateY(0); transition: all 0.3s;
       `;
 
       const optionsHtml = data.options.map(o => {
           // Highlight selected answer
           const isSelected = answer && answer.includes(o.letter);
-          const bg = isSelected ? '#e1f3d8' : 'transparent';
+          const bg = isSelected ? '#f0f9eb' : 'transparent';
           const border = isSelected ? '1px solid #67c23a' : '1px solid transparent';
-          return `<div style="background:${bg}; border:${border}; padding: 2px; border-radius: 4px;"><b>${o.letter}</b>: ${o.text}</div>`
+          const color = isSelected ? '#67c23a' : '#606266';
+          return `<div style="background:${bg}; border:${border}; color:${color}; padding: 6px; margin-bottom: 4px; border-radius: 6px; display:flex; gap:6px;">
+            <span style="font-weight:bold;">${o.letter}.</span>
+            <span>${o.text}</span>
+          </div>`
       }).join('');
       
       const answerHtml = answer ? 
-        `<div style="margin: 15px 0; padding: 10px; background: #ecf5ff; border-left: 4px solid #409eff;">
-            <strong>AI Suggestion:</strong> <span style="font-size: 1.2em; color: #409eff; font-weight: bold;">${answer}</span>
+        `<div style="margin: 10px 0; padding: 8px 12px; background: #ecf5ff; border-radius: 6px; color: #409eff; display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-weight: bold;">AI Suggestion:</span> 
+            <span style="font-size: 1.4em; font-weight: bold;">${answer}</span>
          </div>` : '';
 
       modal.innerHTML = `
-        <h3 style="margin-top:0">${title}</h3>
-        <div style="background:#f5f5f5; padding:10px; margin:10px 0; border-radius:4px;">
-          <strong>Q:</strong> ${data.question}
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:8px;">
+            <h3 style="margin:0; font-size:14px; font-weight:600;">${title}</h3>
+            <span style="color:#999; font-size:11px;">Click outside to hide</span>
+        </div>
+        <div style="background:#f5f7fa; padding:10px; margin-bottom:10px; border-radius:6px; line-height:1.4;">
+          ${data.question}
         </div>
         ${answerHtml}
         <div style="margin-bottom:15px;">
           ${optionsHtml}
         </div>
-        <div style="text-align:right; gap:10px; display:flex; justify-content:flex-end;">
-          <button id="debug-cancel" style="padding:8px 15px; background:#f56c6c; color:white; border:none; border-radius:4px; cursor:pointer;">Stop</button>
-          <button id="debug-confirm" style="padding:8px 15px; background:#409eff; color:white; border:none; border-radius:4px; cursor:pointer;">
-            ${answer ? 'Apply Answer' : 'Confirm Question'}
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button id="debug-cancel" style="padding:6px 12px; background:#f56c6c; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">Stop</button>
+          <button id="debug-confirm" style="padding:6px 12px; background:#409eff; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">
+            ${answer ? 'Apply' : 'Confirm'}
           </button>
         </div>
       `;
 
+      document.body.appendChild(overlay);
       document.body.appendChild(modal);
 
+      const cleanup = () => {
+        if (document.body.contains(modal)) modal.remove();
+        if (document.body.contains(overlay)) overlay.remove();
+      };
+
       document.getElementById('debug-confirm').onclick = () => {
-        modal.remove();
+        cleanup();
         resolve(true);
       };
 
+      // Stop button
       document.getElementById('debug-cancel').onclick = () => {
-        modal.remove();
-        resolve(false);
+        cleanup();
+        resolve(false); // Stop execution
+      };
+
+      // Click outside (Overlay) -> Hide and Stop (Stealth Mode)
+      overlay.onclick = () => {
+        cleanup();
+        this.updateStatus("Hidden by user interaction", "gray");
+        resolve(false); // Stop execution to be safe/stealthy
       };
     }
 
