@@ -6,6 +6,7 @@ if (!window.hasExamAssistantRunning) {
       this.isRunning = false;
       this.statusPanel = null;
       this._lastCopiedQuestion = null;
+      this._skipDebugMode = false; // Flag to temporarily skip debug mode
       this.createStatusPanel();
     }
 
@@ -168,20 +169,36 @@ if (!window.hasExamAssistantRunning) {
     start() {
       if (this.isRunning) return;
       this.isRunning = true;
+      this._skipDebugMode = false; // Reset flag when starting normally
       this.updateStatus("Started", "#409EFF");
-      
+
       if (this.btnStart) {
           this.btnStart.style.display = 'none';
           this.btnPause.style.display = 'flex';
       }
-      
+
+      this.processLoop();
+    }
+
+    startWithoutDebug() {
+      if (this.isRunning) return;
+      this.isRunning = true;
+      this._skipDebugMode = true; // Set flag to skip debug mode
+      this.updateStatus("Started (Debug Mode Disabled)", "#409EFF");
+
+      if (this.btnStart) {
+          this.btnStart.style.display = 'none';
+          this.btnPause.style.display = 'flex';
+      }
+
       this.processLoop();
     }
 
     stop() {
       this.isRunning = false;
+      this._skipDebugMode = false; // Reset flag when stopping
       this.updateStatus("Paused", "#F56C6C");
-      
+
       if (this.btnStart) {
           this.btnStart.style.display = 'flex';
           this.btnPause.style.display = 'none';
@@ -271,7 +288,7 @@ if (!window.hasExamAssistantRunning) {
         if (data.type === 'short-answer') {
           success = this.fillAnswer(data.inputElement, answer);
         } else {
-          success = this.selectOption(questionEl, answer);
+          success = this.selectOption(data, answer);
         }
 
         if (success) {
@@ -367,6 +384,8 @@ if (!window.hasExamAssistantRunning) {
 
         // Extract Options (support both radio and checkbox)
         const options = [];
+        const optionInputMap = new Map(); // Map letter to input element
+
         // Select both types of containers
         const optionEls = questionEl.querySelectorAll('.el-radio-group .choices, .el-checkbox-group .choices');
 
@@ -377,19 +396,20 @@ if (!window.hasExamAssistantRunning) {
           const letterDiv = opt.querySelector('.choices-label');
 
           let letter = letterDiv ? letterDiv.innerText.replace('.', '').trim() : '';
-          if (!letter && input) letter = input.value;
 
           const text = labelText ? labelText.innerText.trim() : '';
 
-          if (letter && text) {
+          if (letter && text && input) {
             options.push({ letter, text });
+            optionInputMap.set(letter, input); // Store mapping
           }
         });
 
         return {
           question: questionText,
           options: options,
-          type: isCheckbox ? 'checkbox' : 'radio'
+          type: isCheckbox ? 'checkbox' : 'radio',
+          optionInputMap: optionInputMap // Include the map
         };
       } catch (e) {
         console.error("Extraction error", e);
@@ -398,6 +418,11 @@ if (!window.hasExamAssistantRunning) {
     }
 
     async isDebugMode() {
+        // If skipDebugMode flag is set, return false to skip debug mode
+        if (this._skipDebugMode) {
+          return false;
+        }
+
         return new Promise((resolve) => {
           chrome.storage.sync.get(['debugMode'], (result) => {
             resolve(!!result.debugMode);
@@ -622,30 +647,61 @@ if (!window.hasExamAssistantRunning) {
       });
     }
 
-    selectOption(questionEl, answer) {
+    selectOption(data, answer) {
       // Answer can be "A" or "AC"
       const letters = answer.split('');
       let successCount = 0;
 
-      const inputs = Array.from(questionEl.querySelectorAll('input.el-radio__original, input.el-checkbox__original'));
+      // Use the optionInputMap if available, otherwise fall back to querySelector
+      if (data.optionInputMap && data.optionInputMap.size > 0) {
+        letters.forEach(letter => {
+          const input = data.optionInputMap.get(letter);
+          if (input) {
+            const clickableLabel = input.closest('.el-radio, .el-checkbox');
+            if (clickableLabel) {
+              const isChecked = clickableLabel.classList.contains('is-checked');
 
-      letters.forEach(letter => {
-        const targetInput = inputs.find(i => i.value === letter);
-        if (targetInput) {
-          const clickableLabel = targetInput.closest('.el-radio, .el-checkbox');
-          // Check if already checked to avoid unchecking in checkbox mode
-          const isChecked = clickableLabel.classList.contains('is-checked');
+              if (!isChecked) {
+                // Try multiple click strategies
+                clickableLabel.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                clickableLabel.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                clickableLabel.click();
 
-          if (clickableLabel && !isChecked) {
-            clickableLabel.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-            clickableLabel.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-            clickableLabel.click();
-            successCount++;
-          } else if (isChecked) {
-            successCount++; // Already correct
+                // Also try clicking the input directly
+                input.click();
+
+                successCount++;
+              } else {
+                successCount++; // Already correct
+              }
+            }
           }
-        }
-      });
+        });
+      } else {
+        // Fallback: try to find inputs by value (old method)
+        console.warn('[ExamAssistant] optionInputMap not available, using fallback method');
+        const questionEl = this.findCurrentQuestion();
+        if (!questionEl) return false;
+
+        const inputs = Array.from(questionEl.querySelectorAll('input.el-radio__original, input.el-checkbox__original'));
+
+        letters.forEach(letter => {
+          const targetInput = inputs.find(i => i.value === letter);
+          if (targetInput) {
+            const clickableLabel = targetInput.closest('.el-radio, .el-checkbox');
+            const isChecked = clickableLabel && clickableLabel.classList.contains('is-checked');
+
+            if (clickableLabel && !isChecked) {
+              clickableLabel.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+              clickableLabel.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+              clickableLabel.click();
+              successCount++;
+            } else if (isChecked) {
+              successCount++; // Already correct
+            }
+          }
+        });
+      }
 
       return successCount > 0;
     }
@@ -745,6 +801,14 @@ if (!window.hasExamAssistantRunning) {
           console.log("[ExamAssistant] Shortcut Alt+M triggered - Copy question");
           e.preventDefault();
           assistant.copyQuestion();
+      } else if (e.altKey && e.key.toLowerCase() === 'd') {
+          console.log("[ExamAssistant] Shortcut Alt+D triggered - Start without Debug Mode");
+          e.preventDefault();
+          if (assistant.isRunning) {
+              assistant.stop();
+          } else {
+              assistant.startWithoutDebug();
+          }
       }
   });
 
