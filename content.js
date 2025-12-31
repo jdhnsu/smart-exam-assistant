@@ -5,6 +5,7 @@ if (!window.hasExamAssistantRunning) {
     constructor() {
       this.isRunning = false;
       this.statusPanel = null;
+      this._lastCopiedQuestion = null;
       this.createStatusPanel();
     }
 
@@ -17,84 +18,91 @@ if (!window.hasExamAssistantRunning) {
         position: fixed;
         bottom: 20px;
         right: 20px;
-        padding: 4px 8px;
-        background: rgba(0, 0, 0, 0.2);
-        color: white;
-        border-radius: 12px;
+        width: 12px;
+        height: 12px;
+        background: rgba(64, 158, 255, 0.15);
+        border-radius: 50%;
         z-index: 999999;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        font-size: 12px;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        backdrop-filter: blur(2px);
+        cursor: pointer;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        transform-origin: right bottom;
-        max-width: 60px;
-        overflow: hidden;
-        white-space: nowrap;
-        opacity: 0.3;
+        box-shadow: 0 0 6px rgba(64, 158, 255, 0.3);
       `;
       
-      const playIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
-      const pauseIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
-      const nextIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>`;
-      const copyIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
+      const playIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+      const pauseIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+      const nextIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>`;
+      const copyIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
 
       div.innerHTML = `
-        <div class="ea-controls" style="display: flex; gap: 4px; opacity: 1; transition: opacity 0.2s;">
-            <button id="ea-btn-copy" title="Copy Question" style="background: none; border: none; color: #E6A23C; cursor: pointer; padding: 2px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+        <div class="ea-controls" style="display: none; position: absolute; bottom: 20px; right: 20px; flex-direction: column; gap: 6px; background: rgba(0, 0, 0, 0.85); padding: 8px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); pointer-events: auto;">
+            <button id="ea-btn-copy" title="Copy Question" style="background: rgba(230, 162, 60, 0.2); border: none; color: #E6A23C; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: all 0.2s;">
                 ${copyIcon}
             </button>
-            <button id="ea-btn-start" title="Get Answer" style="background: none; border: none; color: #67C23A; cursor: pointer; padding: 2px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+            <button id="ea-btn-start" title="Get Answer" style="background: rgba(103, 194, 58, 0.2); border: none; color: #67C23A; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: all 0.2s;">
                 ${playIcon}
             </button>
-            <button id="ea-btn-pause" title="Cancel" style="background: none; border: none; color: #F56C6C; cursor: pointer; padding: 2px; display: none; align-items: center; justify-content: center; border-radius: 4px;">
+            <button id="ea-btn-pause" title="Cancel" style="background: rgba(245, 108, 108, 0.2); border: none; color: #F56C6C; cursor: pointer; padding: 6px; display: none; align-items: center; justify-content: center; border-radius: 6px; transition: all 0.2s;">
                 ${pauseIcon}
             </button>
-            <button id="ea-btn-next" title="Next Question" style="background: none; border: none; color: #409EFF; cursor: pointer; padding: 2px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+            <button id="ea-btn-next" title="Next Question" style="background: rgba(64, 158, 255, 0.2); border: none; color: #409EFF; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: all 0.2s;">
                 ${nextIcon}
             </button>
         </div>
-        <div id="ea-status-text" style="font-weight: 500; opacity: 0; transition: opacity 0.2s; margin-left: 4px;">AI Ready</div>
       `;
 
       document.body.appendChild(div);
       this.statusPanel = div;
-      this.statusText = div.querySelector('#ea-status-text');
       this.btnCopy = div.querySelector('#ea-btn-copy');
       this.btnStart = div.querySelector('#ea-btn-start');
       this.btnPause = div.querySelector('#ea-btn-pause');
       this.btnNext = div.querySelector('#ea-btn-next');
       this.controls = div.querySelector('.ea-controls');
+      this._hideControlsTimer = null;
 
-      // Interaction Logic
-      const expand = () => {
-          div.style.maxWidth = '300px';
-          div.style.background = 'rgba(0, 0, 0, 0.8)';
-          div.style.opacity = '1';
-          div.style.padding = '8px 12px';
-          div.style.borderRadius = '8px';
-          this.statusText.style.opacity = '1';
-          // this.controls.style.opacity = '1';
+      // Interaction Logic - Show controls on hover with delay
+      const showControls = () => {
+          if (this._hideControlsTimer) {
+              clearTimeout(this._hideControlsTimer);
+              this._hideControlsTimer = null;
+          }
+          this.controls.style.display = 'flex';
+          div.style.background = 'rgba(64, 158, 255, 0.4)';
+          div.style.boxShadow = '0 0 10px rgba(64, 158, 255, 0.6)';
       };
 
-      const collapse = () => {
-          div.style.maxWidth = '60px';
-          div.style.background = 'rgba(0, 0, 0, 0.2)';
-          div.style.opacity = '0.3';
-          div.style.padding = '4px 8px';
-          div.style.borderRadius = '12px';
-          this.statusText.style.opacity = '0';
-          // this.controls.style.opacity = '0';
+      const hideControls = () => {
+          this._hideControlsTimer = setTimeout(() => {
+              this.controls.style.display = 'none';
+              div.style.background = 'rgba(64, 158, 255, 0.15)';
+              div.style.boxShadow = '0 0 6px rgba(64, 158, 255, 0.3)';
+          }, 300); // 300ms delay before hiding
       };
 
-      div.addEventListener('mouseenter', expand);
-      div.addEventListener('mouseleave', collapse);
+      div.addEventListener('mouseenter', showControls);
+      div.addEventListener('mouseleave', hideControls);
 
-      // Keep expanded if running? No, user requested semi-hidden.
-      // But maybe flash briefly on status update?
+      // Keep controls visible when hovering over them
+      this.controls.addEventListener('mouseenter', () => {
+          if (this._hideControlsTimer) {
+              clearTimeout(this._hideControlsTimer);
+              this._hideControlsTimer = null;
+          }
+      });
+
+      this.controls.addEventListener('mouseleave', hideControls);
+
+      // Button hover effects
+      [this.btnCopy, this.btnStart, this.btnPause, this.btnNext].forEach(btn => {
+          if (!btn) return;
+          btn.addEventListener('mouseenter', () => {
+              btn.style.transform = 'scale(1.1)';
+              btn.style.opacity = '1';
+          });
+          btn.addEventListener('mouseleave', () => {
+              btn.style.transform = 'scale(1)';
+              btn.style.opacity = '0.9';
+          });
+      });
 
       this.btnCopy.onclick = (e) => { e.stopPropagation(); this.copyQuestion(); };
       this.btnStart.onclick = (e) => { e.stopPropagation(); this.start(); };
@@ -103,9 +111,21 @@ if (!window.hasExamAssistantRunning) {
     }
 
     updateStatus(text, color = 'white') {
-      if (this.statusText) {
-        this.statusText.innerText = text;
-        this.statusText.style.color = color;
+      // Update dot color based on status
+      if (this.statusPanel) {
+        if (text.includes('Error') || text.includes('failed') || text.includes('Could not')) {
+          this.statusPanel.style.background = 'rgba(245, 108, 108, 0.3)'; // Red
+          this.statusPanel.style.boxShadow = '0 0 8px rgba(245, 108, 108, 0.5)';
+        } else if (text.includes('copied') || text.includes('Answered') || text.includes('filled')) {
+          this.statusPanel.style.background = 'rgba(103, 194, 58, 0.3)'; // Green
+          this.statusPanel.style.boxShadow = '0 0 8px rgba(103, 194, 58, 0.5)';
+        } else if (text.includes('Thinking') || text.includes('Started')) {
+          this.statusPanel.style.background = 'rgba(230, 162, 60, 0.3)'; // Orange
+          this.statusPanel.style.boxShadow = '0 0 8px rgba(230, 162, 60, 0.5)';
+        } else {
+          this.statusPanel.style.background = 'rgba(64, 158, 255, 0.15)'; // Blue (default)
+          this.statusPanel.style.boxShadow = '0 0 6px rgba(64, 158, 255, 0.3)';
+        }
       }
       console.log(`[ExamAssistant] ${text}`);
     }
@@ -274,10 +294,43 @@ if (!window.hasExamAssistantRunning) {
     findCurrentQuestion() {
       // Filter for visible questions only
       const questions = Array.from(document.querySelectorAll('.item-box'));
-      return questions.find(q => {
+      const currentQuestion = questions.find(q => {
         const style = window.getComputedStyle(q);
         return style.display !== 'none' && style.visibility !== 'hidden' && q.offsetParent !== null;
       });
+
+      // Auto-copy for short answer questions
+      if (currentQuestion) {
+        const typeTag = currentQuestion.querySelector('.question-type .el-tag__content');
+        const typeText = typeTag ? typeTag.innerText.trim() : '';
+        const isShortAnswer = typeText.includes('问答题') || typeText.includes('填空题') || typeText.includes('简答题');
+
+        if (isShortAnswer && !this._lastCopiedQuestion) {
+          // Auto-copy the question to clipboard
+          const textEl = currentQuestion.querySelector('.qusetion-info .info-item .value');
+          if (textEl) {
+            const questionText = textEl.innerText.replace(/\s+/g, ' ').trim();
+            navigator.clipboard.writeText(questionText).then(() => {
+              console.log('[ExamAssistant] Auto-copied short answer question to clipboard');
+              this._lastCopiedQuestion = questionText;
+              // Flash green briefly
+              this.statusPanel.style.background = 'rgba(103, 194, 58, 0.3)';
+              this.statusPanel.style.boxShadow = '0 0 8px rgba(103, 194, 58, 0.5)';
+              setTimeout(() => {
+                this.statusPanel.style.background = 'rgba(64, 158, 255, 0.15)';
+                this.statusPanel.style.boxShadow = '0 0 6px rgba(64, 158, 255, 0.3)';
+              }, 1000);
+            }).catch(err => {
+              console.error('[ExamAssistant] Auto-copy failed:', err);
+            });
+          }
+        } else if (!isShortAnswer) {
+          // Reset for non-short-answer questions
+          this._lastCopiedQuestion = null;
+        }
+      }
+
+      return currentQuestion;
     }
 
     isQuestionAnswered(questionEl) {
@@ -688,6 +741,10 @@ if (!window.hasExamAssistantRunning) {
           } else {
               assistant.start();
           }
+      } else if (e.altKey && e.key.toLowerCase() === 'm') {
+          console.log("[ExamAssistant] Shortcut Alt+M triggered - Copy question");
+          e.preventDefault();
+          assistant.copyQuestion();
       }
   });
 
