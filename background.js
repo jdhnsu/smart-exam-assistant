@@ -7,14 +7,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 async function handleAIRequest(questionData, sendResponse) {
   try {
-    const settings = await chrome.storage.sync.get(['provider', 'apiKey', 'modelName']);
-    
+    const settings = await chrome.storage.sync.get(['provider', 'apiKey', 'modelName', 'shortAnswerPrompt']);
+
     if (!settings.apiKey) {
       sendResponse({ error: "API Key missing" });
       return;
     }
 
-    const prompt = createPrompt(questionData);
+    const prompt = createPrompt(questionData, settings.shortAnswerPrompt || '');
     let answer = null;
 
     if (settings.provider === 'openai') {
@@ -25,10 +25,16 @@ async function handleAIRequest(questionData, sendResponse) {
       answer = await callQwen(settings.apiKey, settings.modelName || 'qwen-plus', prompt);
     }
 
-    // Clean up answer (expecting "A", "B" or "A,C", "ABC")
-    // Allow multiple letters for checkboxes
-    const cleanAnswer = answer ? answer.trim().toUpperCase().replace(/[^A-Z]/g, '') : null;
-    
+    // Clean up answer
+    let cleanAnswer;
+    if (questionData.type === 'short-answer') {
+      // For short answer, return the full response (but trim whitespace)
+      cleanAnswer = answer ? answer.trim() : null;
+    } else {
+      // For multiple choice, extract only letters (expecting "A", "B" or "A,C", "ABC")
+      cleanAnswer = answer ? answer.trim().toUpperCase().replace(/[^A-Z]/g, '') : null;
+    }
+
     sendResponse({ answer: cleanAnswer });
 
   } catch (error) {
@@ -37,17 +43,34 @@ async function handleAIRequest(questionData, sendResponse) {
   }
 }
 
-function createPrompt(data) {
+function createPrompt(data, customPrompt) {
+  // Handle short answer questions
+  if (data.type === 'short-answer') {
+    let basePrompt = `You are a helpful exam assistant. Please answer the following question directly and concisely.`;
+
+    // If user provided a custom prompt, use it
+    if (customPrompt) {
+      basePrompt = `You are a helpful exam assistant. ${customPrompt}`;
+    }
+
+    return `${basePrompt}
+
+Question: ${data.question}
+
+Please provide a direct answer without additional explanation.`;
+  }
+
+  // Handle multiple choice questions
   let optionsStr = data.options.map(o => `${o.letter}. ${o.text}`).join('\n');
   const typeHint = data.type === 'checkbox' ? '(Select ALL that apply)' : '(Select only ONE)';
-  
-  return `You are a helpful exam assistant. 
+
+  return `You are a helpful exam assistant.
   Question: ${data.question} ${typeHint}
   Options:
   ${optionsStr}
-  
-  Please provide ONLY the letters corresponding to the correct answer(s). 
-  If multiple answers are correct, combine them (e.g., "AC" or "ABD"). 
+
+  Please provide ONLY the letters corresponding to the correct answer(s).
+  If multiple answers are correct, combine them (e.g., "AC" or "ABD").
   Do not add any explanation or punctuation.`;
 }
 

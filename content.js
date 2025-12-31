@@ -40,9 +40,13 @@ if (!window.hasExamAssistantRunning) {
       const playIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
       const pauseIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
       const nextIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>`;
+      const copyIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
 
       div.innerHTML = `
         <div class="ea-controls" style="display: flex; gap: 4px; opacity: 1; transition: opacity 0.2s;">
+            <button id="ea-btn-copy" title="Copy Question" style="background: none; border: none; color: #E6A23C; cursor: pointer; padding: 2px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+                ${copyIcon}
+            </button>
             <button id="ea-btn-start" title="Get Answer" style="background: none; border: none; color: #67C23A; cursor: pointer; padding: 2px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
                 ${playIcon}
             </button>
@@ -59,6 +63,7 @@ if (!window.hasExamAssistantRunning) {
       document.body.appendChild(div);
       this.statusPanel = div;
       this.statusText = div.querySelector('#ea-status-text');
+      this.btnCopy = div.querySelector('#ea-btn-copy');
       this.btnStart = div.querySelector('#ea-btn-start');
       this.btnPause = div.querySelector('#ea-btn-pause');
       this.btnNext = div.querySelector('#ea-btn-next');
@@ -91,6 +96,7 @@ if (!window.hasExamAssistantRunning) {
       // Keep expanded if running? No, user requested semi-hidden.
       // But maybe flash briefly on status update?
 
+      this.btnCopy.onclick = (e) => { e.stopPropagation(); this.copyQuestion(); };
       this.btnStart.onclick = (e) => { e.stopPropagation(); this.start(); };
       this.btnPause.onclick = (e) => { e.stopPropagation(); this.stop(); };
       this.btnNext.onclick = (e) => { e.stopPropagation(); this.goToNextQuestion(); };
@@ -102,6 +108,41 @@ if (!window.hasExamAssistantRunning) {
         this.statusText.style.color = color;
       }
       console.log(`[ExamAssistant] ${text}`);
+    }
+
+    async copyQuestion() {
+      try {
+        // Find current question
+        const questionEl = this.findCurrentQuestion();
+        if (!questionEl) {
+          this.updateStatus("No question found to copy", "red");
+          return;
+        }
+
+        // Extract question text (without question number)
+        const textEl = questionEl.querySelector('.qusetion-info .info-item .value');
+        if (!textEl) {
+          this.updateStatus("Could not extract question text", "red");
+          return;
+        }
+
+        // Get the text content, cleaned up
+        const questionText = textEl.innerText.replace(/\s+/g, ' ').trim();
+
+        // Copy to clipboard
+        await navigator.clipboard.writeText(questionText);
+
+        this.updateStatus("Question copied!", "#67C23A");
+
+        // Reset status after 2 seconds
+        setTimeout(() => {
+          this.updateStatus("AI Ready", "white");
+        }, 2000);
+
+      } catch (err) {
+        console.error("Copy failed:", err);
+        this.updateStatus("Copy failed: " + err.message, "red");
+      }
     }
 
     start() {
@@ -148,9 +189,23 @@ if (!window.hasExamAssistantRunning) {
       // 3. Extract Data
       this.updateStatus("Extracting question data...");
       const data = this.extractQuestionData(questionEl);
-      if (!data || !data.options.length) {
-        this.updateStatus("Failed to extract question/options", "red");
+      if (!data) {
+        this.updateStatus("Failed to extract question data", "red");
         this.stop(); // Stop if we can't read the question
+        return;
+      }
+
+      // For short-answer questions, check if input element exists
+      if (data.type === 'short-answer' && !data.inputElement) {
+        this.updateStatus("No input field found for short answer", "red");
+        this.stop();
+        return;
+      }
+
+      // For choice questions, check if options exist
+      if (data.type !== 'short-answer' && !data.options.length) {
+        this.updateStatus("Failed to extract question options", "red");
+        this.stop();
         return;
       }
 
@@ -190,16 +245,23 @@ if (!window.hasExamAssistantRunning) {
         }
 
         this.updateStatus(`AI chose: ${answer}`, "#409EFF");
-        
-        // 5. Select Option
-        const success = this.selectOption(questionEl, answer);
-        
+
+        // 5. Select Option or Fill Answer
+        let success;
+        if (data.type === 'short-answer') {
+          success = this.fillAnswer(data.inputElement, answer);
+        } else {
+          success = this.selectOption(questionEl, answer);
+        }
+
         if (success) {
-          this.updateStatus("Answered. Click Next manually.", "#67C23A");
+          const msg = data.type === 'short-answer' ? "Answer filled. Click Next manually." : "Answered. Click Next manually.";
+          this.updateStatus(msg, "#67C23A");
           // Stop automatically after answering one question
           this.stop();
         } else {
-          this.updateStatus(`Could not select option ${answer}`, "red");
+          const errorMsg = data.type === 'short-answer' ? "Could not fill answer" : `Could not select option ${answer}`;
+          this.updateStatus(errorMsg, "red");
           this.stop();
         }
 
@@ -229,25 +291,43 @@ if (!window.hasExamAssistantRunning) {
         const textEl = questionEl.querySelector('.qusetion-info .info-item .value');
         const questionText = textEl ? textEl.innerText.replace(/\s+/g, ' ').trim() : "Unknown Question";
 
-        // Detect type
+        // Detect question type from the type tag
+        const typeTag = questionEl.querySelector('.question-type .el-tag__content');
+        const typeText = typeTag ? typeTag.innerText.trim() : '';
+
+        // Check if it's a short answer question (问答题)
+        const isShortAnswer = typeText.includes('问答题') || typeText.includes('填空题') || typeText.includes('简答题');
+
+        if (isShortAnswer) {
+          // For short answer questions, find the input field
+          const inputEl = questionEl.querySelector('.el-input__inner');
+          return {
+            question: questionText,
+            options: [],
+            type: 'short-answer',
+            inputElement: inputEl
+          };
+        }
+
+        // Detect type for multiple choice questions
         const isCheckbox = !!questionEl.querySelector('.el-checkbox-group');
 
         // Extract Options (support both radio and checkbox)
         const options = [];
         // Select both types of containers
         const optionEls = questionEl.querySelectorAll('.el-radio-group .choices, .el-checkbox-group .choices');
-        
+
         optionEls.forEach(opt => {
           // Support both radio and checkbox inputs
           const input = opt.querySelector('input.el-radio__original, input.el-checkbox__original');
           const labelText = opt.querySelector('.choices-html');
           const letterDiv = opt.querySelector('.choices-label');
-          
+
           let letter = letterDiv ? letterDiv.innerText.replace('.', '').trim() : '';
           if (!letter && input) letter = input.value;
-          
+
           const text = labelText ? labelText.innerText.trim() : '';
-          
+
           if (letter && text) {
             options.push({ letter, text });
           }
@@ -495,14 +575,14 @@ if (!window.hasExamAssistantRunning) {
       let successCount = 0;
 
       const inputs = Array.from(questionEl.querySelectorAll('input.el-radio__original, input.el-checkbox__original'));
-      
+
       letters.forEach(letter => {
         const targetInput = inputs.find(i => i.value === letter);
         if (targetInput) {
           const clickableLabel = targetInput.closest('.el-radio, .el-checkbox');
           // Check if already checked to avoid unchecking in checkbox mode
           const isChecked = clickableLabel.classList.contains('is-checked');
-          
+
           if (clickableLabel && !isChecked) {
             clickableLabel.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
             clickableLabel.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
@@ -515,6 +595,32 @@ if (!window.hasExamAssistantRunning) {
       });
 
       return successCount > 0;
+    }
+
+    fillAnswer(inputElement, answer) {
+      if (!inputElement) return false;
+
+      try {
+        // Focus the input element
+        inputElement.focus();
+
+        // Set the value
+        inputElement.value = answer;
+
+        // Trigger input event to notify Vue/framework
+        inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+        inputElement.dispatchEvent(new Event('change', { bubbles: true }));
+
+        // Also try setting it via Vue if available
+        if (inputElement.__v_model) {
+          inputElement.__v_model.value = answer;
+        }
+
+        return true;
+      } catch (e) {
+        console.error("Failed to fill answer:", e);
+        return false;
+      }
     }
 
     goToNextQuestion() {
