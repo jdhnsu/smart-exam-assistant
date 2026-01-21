@@ -48,6 +48,22 @@
   <button id="saveBtn">Save Settings</button>
   <div id="status"></div>
   
+  <hr style="margin:12px 0;">
+  <h4>Detected Questions</h4>
+  <div class="group">
+    <button id="fetchQuestions">Fetch Questions From Page</button>
+  </div>
+  <div class="group">
+    <button id="selectOnPage" style="background:#fff;color:#409EFF;border:1px solid #e6e6e6;margin-top:6px;">Select On Page</button>
+  </div>
+  <div class="group" id="questionArea" style="max-height:220px; overflow:auto; border:1px solid #eee; padding:8px; border-radius:6px; display:none;">
+    <!-- Question list will be injected here -->
+  </div>
+  <div class="group" style="display:flex; gap:8px;">
+    <button id="batchAI" style="flex:1;">Request AI for Selected</button>
+    <button id="applySelected" style="flex:1; background:#67C23A;">Apply Selected</button>
+  </div>
+  
   <script src="popup.js"></script>
 </body>
 </html>

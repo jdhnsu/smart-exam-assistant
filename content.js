@@ -417,6 +417,112 @@ if (!window.hasExamAssistantRunning) {
       }
     }
 
+    // Extract all questions on the page (or within .item-box containers)
+    extractAllQuestions() {
+      try {
+        const containers = Array.from(document.querySelectorAll('.item-box'));
+
+        // If the site already exposes per-question containers, use them and try to group passages
+        if (containers.length > 1) {
+          // Try to detect passage markers near questions (e.g., elements containing '阅读' / '根据短文')
+          const passageKeywords = ['阅读下列', '根据短文', '根据短文回答', '阅读短文', '阅读下面短文', '相关阅读'];
+
+          // Find candidate passage elements
+          const passageEls = Array.from(document.querySelectorAll('p, div, section')).filter(el => {
+            const txt = (el.innerText || '').trim();
+            if (!txt) return false;
+            if (txt.length > 300) return true;
+            for (const k of passageKeywords) if (txt.includes(k)) return true;
+            return false;
+          });
+
+          // Build a map of which container belongs to which passage (if any)
+          const groups = {};
+          let setCounter = 0;
+
+          containers.forEach((el, idx) => {
+            const q = this.extractQuestionData(el);
+            // Try to find a passage element that appears before this container in DOM order
+            const passage = passageEls.find(p => p.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+            const setId = passage ? `set-${passageEls.indexOf(passage)}` : null;
+            const passageText = passage ? (passage.innerText || '').trim().slice(0, 2000) : null;
+
+            if (setId) groups[setId] = passageText;
+
+            // Use question data where possible
+            const questionText = q ? q.question : (el.innerText || '').slice(0, 400);
+            const opts = q ? q.options : [];
+            groups[idx] = groups[idx] || null;
+
+            containers[idx].dataset._ea_id = `q-${idx}`;
+
+            containers[idx]._ea_data = {
+              id: `q-${idx}`,
+              index: idx,
+              question: questionText,
+              type: q ? q.type : 'unknown',
+              options: opts,
+              applySupported: true,
+              setId: setId,
+              passageText: passageText
+            };
+          });
+
+          // Return array of extracted data
+          return containers.map((el) => el._ea_data);
+        }
+
+        // Fallback: if only one big container or none, try split by numbered headings and detect passages
+        const root = containers[0] || document.body;
+        const text = root.innerText || '';
+
+        // Attempt to detect a passage header like '阅读下列短文' and split accordingly
+        const passageHeaderMatch = text.match(/(阅读下列[\s\S]{0,40}|根据短文[\s\S]{0,40}|阅读下面短文[\s\S]{0,40})/i);
+        let passageText = null;
+        if (passageHeaderMatch) {
+          // Heuristic: take the paragraph following header as passage (first 800 chars)
+          const after = text.slice(passageHeaderMatch.index + passageHeaderMatch[0].length).trim();
+          passageText = after.slice(0, 1200);
+        }
+
+        // Split by lines that start with number + dot/)、． etc.
+        const parts = text.split(/\n(?=\s*\d+[\.|\)|\uff0e]\s+)/);
+
+        const questions = parts.map((part, idx) => {
+          const lines = part.split('\n').map(l => l.trim()).filter(Boolean);
+          const opts = [];
+          let stemLines = [];
+
+          lines.forEach(line => {
+            const m = line.match(/^([A-Z])[\.\)．:]\s*(.+)$/);
+            if (m) {
+              opts.push({ letter: m[1], text: m[2] });
+            } else {
+              stemLines.push(line);
+            }
+          });
+
+          const isComp = !!passageText && idx > 0; // if passage exists, assume following parts are questions
+
+          return {
+            id: `q-split-${idx}`,
+            index: idx,
+            question: stemLines.join(' ').slice(0, 2000),
+            type: opts.length ? (opts.length > 1 ? 'radio' : 'radio') : (isComp ? 'comprehension' : 'short-answer'),
+            options: opts,
+            applySupported: false,
+            setId: passageText ? `passage-0` : null,
+            passageText: passageText
+          };
+        });
+
+        return questions;
+      } catch (e) {
+        console.error('[ExamAssistant] extractAllQuestions failed', e);
+        return [];
+      }
+    }
+
     async isDebugMode() {
         // If skipDebugMode flag is set, return false to skip debug mode
         if (this._skipDebugMode) {
@@ -706,6 +812,49 @@ if (!window.hasExamAssistantRunning) {
       return successCount > 0;
     }
 
+    highlightQuestionById(id) {
+      try {
+        const el = document.querySelector(`[data-_ea_id="${id}"]`);
+        let target = el;
+        if (!target) {
+          // Fallback: try to find by text snippet
+          const qs = Array.from(document.querySelectorAll('.item-box'));
+          const q = qs.find(node => (node.innerText || '').includes(id.replace('q-split-', '').slice(0, 10)));
+          target = q || null;
+        }
+
+        if (!target) return { success: false, error: 'element not found' };
+
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Add highlight style
+        target.classList.add('ea-temp-highlight');
+        // Ensure style exists
+        if (!document.getElementById('ea-highlight-style')) {
+          const s = document.createElement('style');
+          s.id = 'ea-highlight-style';
+          s.innerHTML = `
+            .ea-temp-highlight {
+              transition: box-shadow 0.2s ease, background-color 0.2s ease;
+              box-shadow: 0 0 0 3px rgba(64,158,255,0.25) inset, 0 6px 18px rgba(64,158,255,0.12);
+              background-color: rgba(64,158,255,0.04);
+              border-radius: 6px;
+            }
+          `;
+          document.head.appendChild(s);
+        }
+
+        // Remove after 3.5s
+        setTimeout(() => {
+          try { target.classList.remove('ea-temp-highlight'); } catch (e) {}
+        }, 3500);
+
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: err && err.message };
+      }
+    }
+
     fillAnswer(inputElement, answer) {
       if (!inputElement) return false;
 
@@ -817,6 +966,328 @@ if (!window.hasExamAssistantRunning) {
       assistant.start();
     } else if (request.action === "STOP_ANSWERING") {
       assistant.stop();
+    } else if (request.action === 'GET_ALL_QUESTIONS') {
+      try {
+        const qs = assistant.extractAllQuestions();
+        sendResponse({ questions: qs });
+      } catch (e) {
+        sendResponse({ questions: [], error: e && e.message });
+      }
+    } else if (request.action === 'APPLY_ANSWERS_BATCH') {
+      const answers = request.data || [];
+      const containers = Array.from(document.querySelectorAll('.item-box'));
+
+      const results = answers.map(item => {
+        try {
+          // Only support q-<idx> apply mode
+          if (!item.id || !item.id.startsWith('q-')) {
+            return { id: item.id, success: false, error: 'apply not supported for this id' };
+          }
+          const idx = parseInt(item.id.replace('q-', ''), 10);
+          const container = containers[idx];
+          if (!container) return { id: item.id, success: false, error: 'container not found' };
+
+          // Re-extract question data for this container to get input map or input element
+          const qdata = assistant.extractQuestionData(container);
+          if (!qdata) return { id: item.id, success: false, error: 'could not extract question' };
+
+          let ok = false;
+          if (qdata.type === 'short-answer' && qdata.inputElement) {
+            ok = assistant.fillAnswer(qdata.inputElement, item.answer || '');
+          } else if (qdata.options && qdata.options.length) {
+            ok = assistant.selectOption(qdata, (item.answer || '').toString());
+          } else {
+            return { id: item.id, success: false, error: 'no fillable element' };
+          }
+
+          return { id: item.id, success: !!ok };
+        } catch (err) {
+          return { id: item.id, success: false, error: err && err.message };
+        }
+      });
+
+      sendResponse({ results });
+    } else if (request.action === 'HIGHLIGHT_QUESTION') {
+      try {
+        const id = request.id;
+        const res = assistant.highlightQuestionById(id);
+        sendResponse(res);
+      } catch (e) {
+        sendResponse({ success: false, error: e && e.message });
+      }
+    } else if (request.action === 'START_AREA_SELECT') {
+      try {
+        assistant.startAreaSelection(sendResponse);
+        return true;
+      } catch (e) {
+        sendResponse({ error: e && e.message });
+      }
     }
   });
+
+  // Selection-based quick action: show floating icon after text selection
+  (function setupSelectionIcon() {
+    let icon = null;
+
+    function removeIcon() {
+      if (icon && icon.parentNode) icon.parentNode.removeChild(icon);
+      icon = null;
+    }
+
+    function onMouseUp(e) {
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed) {
+          removeIcon();
+          return;
+        }
+        const text = sel.toString().trim();
+        if (!text || text.length < 6) {
+          removeIcon();
+          return;
+        }
+
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+
+        removeIcon();
+        icon = document.createElement('div');
+        icon.id = 'ea-selection-icon';
+        icon.style.cssText = `position:fixed; left:${rect.right - 28}px; top:${Math.max(8, rect.top - 36)}px; width:28px; height:28px; background:#409EFF; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; z-index:1000005; cursor:pointer; box-shadow:0 6px 18px rgba(64,158,255,0.18);`;
+        icon.title = 'Search question (AI)';
+        icon.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zM10 14a4 4 0 110-8 4 4 0 010 8z"/></svg>';
+
+        document.body.appendChild(icon);
+
+        // click icon => extract selection and show modal
+        icon.onclick = (ev) => {
+          ev.stopPropagation();
+          ev.preventDefault();
+          const selRange = range.cloneRange();
+          const data = assistant.extractFromSelection ? assistant.extractFromSelection(selRange) : null;
+          removeIcon();
+          if (data && data.length) {
+            assistant.showSelectionResultsModal(data);
+          } else {
+            // fallback: just open modal with raw text
+            assistant.showSelectionResultsModal([{ id: 'sel-raw-0', index: 0, question: selRange.toString().trim(), type: 'unknown', options: [], applySupported: false }]);
+          }
+        };
+
+        // remove icon if clicking elsewhere
+        setTimeout(() => {
+          const onDocClick = (ev) => { if (!icon.contains(ev.target)) removeIcon(); };
+          document.addEventListener('click', onDocClick, { once: true });
+        }, 50);
+      }, 10);
+    }
+
+    document.addEventListener('mouseup', onMouseUp);
+  })();
+
+  // Helper: extract questions from a Range (used by selection icon)
+  ExamAssistant.prototype.extractFromSelection = function(range) {
+    try {
+      const text = range.toString().trim();
+      if (!text) return [];
+
+      // Try splitting by numbered questions first
+      let parts = text.split(/\n(?=\s*\d+[\.|\)|\uff0e]\s+)/);
+      if (parts.length <= 1) {
+        // Try splitting by double newlines
+        parts = text.split(/\n\s*\n/).filter(Boolean);
+      }
+
+      const questions = parts.map((part, idx) => {
+        const lines = part.split('\n').map(l => l.trim()).filter(Boolean);
+        const opts = [];
+        const stem = [];
+        lines.forEach(line => {
+          const m = line.match(/^([A-Z])[\.\)．:]\s*(.+)$/);
+          if (m) opts.push({ letter: m[1], text: m[2] }); else stem.push(line);
+        });
+        // If no options found, attempt to locate options in DOM near the range
+        if (!opts.length) {
+          try {
+            const found = this.findOptionsNearRange(range);
+            if (found && found.length) {
+              found.forEach(o => opts.push(o));
+            }
+          } catch (e) {
+            console.warn('findOptionsNearRange failed', e);
+          }
+        }
+        return { id: `sel-range-${idx}`, index: idx, question: stem.join(' ').slice(0,2000), type: opts.length? 'radio':'short-answer', options: opts, applySupported: false };
+      });
+      return questions;
+    } catch (e) {
+      console.error('extractFromSelection error', e);
+      return [];
+    }
+  };
+
+  // Try to find option-like elements/text near a selection Range
+  ExamAssistant.prototype.findOptionsNearRange = function(range) {
+    try {
+      const maxSteps = 12;
+      const res = [];
+      // Start from the endContainer's parent element
+      let el = range.endContainer.nodeType === 1 ? range.endContainer : range.endContainer.parentElement;
+      if (!el) return res;
+
+      // Search upward to a reasonable ancestor to find a question block
+      let ancestor = el;
+      for (let i = 0; i < 6; i++) {
+        if (!ancestor) break;
+        // look for option inputs inside ancestor
+        const inputs = ancestor.querySelectorAll('input[type="radio"], input[type="checkbox"], .choices-html, .choices-label, .el-radio, .el-checkbox');
+        if (inputs && inputs.length) {
+          // collect textual options
+          const seen = new Set();
+          inputs.forEach(inp => {
+            const parent = inp.closest('.choices, .el-radio, .el-checkbox') || inp.parentElement;
+            const label = parent ? (parent.innerText || '').trim() : (inp.value || '').toString();
+            const m = label.match(/^([A-Z])[\.\)．:]?\s*(.+)$/);
+            if (m) {
+              const letter = m[1]; const text = m[2];
+              if (!seen.has(letter)) { res.push({ letter, text }); seen.add(letter); }
+            } else if (label) {
+              // fallback: assign sequential letters
+              const letter = String.fromCharCode(65 + res.length);
+              if (!seen.has(letter)) { res.push({ letter, text: label }); seen.add(letter); }
+            }
+          });
+          if (res.length) return res;
+        }
+        ancestor = ancestor.parentElement;
+      }
+
+      // If not found, try scanning immediate following siblings from the end element
+      let node = el;
+      let steps = 0;
+      while (node && steps < maxSteps) {
+        // check nextElementSibling
+        node = node.nextElementSibling;
+        if (!node) break;
+        const txt = (node.innerText || '').trim();
+        if (!txt) { steps++; continue; }
+        // split lines and detect option-like lines
+        const lines = txt.split('\n').map(l => l.trim()).filter(Boolean);
+        for (const line of lines) {
+          const m = line.match(/^([A-D])[\.\)．:]\s*(.+)$/i);
+          if (m) {
+            res.push({ letter: m[1].toUpperCase(), text: m[2] });
+          }
+        }
+        if (res.length) return res;
+        steps++;
+      }
+
+      // As last resort, perform point-sampling below the range bounding rect to look for option text
+      const rect = range.getBoundingClientRect();
+      const sampleX = rect.left + rect.width / 2;
+      for (let dy = 8; dy < 500; dy += 30) {
+        const y = rect.bottom + dy;
+        try {
+          const elems = document.elementsFromPoint(sampleX, y);
+          for (const e of elems) {
+            const t = (e.innerText || '').trim();
+            if (!t) continue;
+            const lines = t.split('\n').map(l => l.trim()).filter(Boolean);
+            for (const line of lines) {
+              const m = line.match(/^([A-D])[\.\)．:]\s*(.+)$/i);
+              if (m) {
+                res.push({ letter: m[1].toUpperCase(), text: m[2] });
+              }
+            }
+            if (res.length) return res;
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      return res;
+    } catch (e) {
+      console.error('findOptionsNearRange error', e);
+      return [];
+    }
+  };
+
+  // Helper: show modal for selection results (requests AI and shows answers)
+  ExamAssistant.prototype.showSelectionResultsModal = function(questions) {
+    try {
+      const existing = document.getElementById('ea-selection-modal');
+      if (existing) existing.remove();
+
+      const modal = document.createElement('div');
+      modal.id = 'ea-selection-modal';
+      modal.style.cssText = 'position:fixed;right:20px;top:15%;width:420px;background:rgba(255,255,255,0.98);padding:12px;border-radius:10px;z-index:1000006;box-shadow:0 8px 36px rgba(0,0,0,0.18);max-height:70vh;overflow:auto;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;';
+
+      const header = document.createElement('div');
+      header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding-bottom:6px;border-bottom:1px solid #eee;margin-bottom:8px;';
+      header.innerHTML = `<strong style="font-size:14px;">Selection Results</strong><div style="cursor:pointer;color:#909399;font-size:18px;">×</div>`;
+      modal.appendChild(header);
+
+      const list = document.createElement('div');
+      list.id = 'ea-selection-list';
+
+      questions.forEach(q => {
+        const item = document.createElement('div');
+        item.style.cssText = 'padding:8px;border:1px solid #f3f3f3;border-radius:6px;margin-bottom:8px;';
+        item.id = `ea-s-${q.id}`;
+        item.innerHTML = `<div style="font-weight:600;color:#333;">${q.question.slice(0,300)}</div><div style="margin-top:6px;color:#909399;">Type: ${q.type} ${q.applySupported? '· AutoApply':''}</div><div style="margin-top:8px;color:#409EFF;">AI: <span class="ea-ai">-</span></div><div style="margin-top:8px;display:flex;gap:8px;"><button class="ea-btn-ai">Request AI</button><button class="ea-btn-copy">Copy</button><button class="ea-btn-apply" ${q.applySupported? '':'disabled'}>Apply</button></div>`;
+        list.appendChild(item);
+      });
+
+      modal.appendChild(list);
+
+      document.body.appendChild(modal);
+
+      // close handler
+      header.querySelector('div').onclick = () => { modal.remove(); };
+
+      // wire buttons
+      list.querySelectorAll('.ea-btn-ai').forEach((btn, idx) => {
+        btn.addEventListener('click', () => {
+          const q = questions[idx];
+          // call background batch for single question
+          chrome.runtime.sendMessage({ action: 'GET_AI_ANSWERS_BATCH', data: [q] }, (resp) => {
+            if (resp && resp.results && resp.results[0]) {
+              const r = resp.results[0];
+              const el = document.querySelector(`#ea-s-${q.id}`);
+              if (el) el.querySelector('.ea-ai').textContent = r.answer || (r.error? `Error: ${r.error}` : '');
+            }
+          });
+        });
+      });
+
+      list.querySelectorAll('.ea-btn-copy').forEach((btn, idx) => {
+        btn.addEventListener('click', async () => {
+          const q = questions[idx];
+          const el = document.querySelector(`#ea-s-${q.id}`);
+          const ai = el ? el.querySelector('.ea-ai').textContent.trim() : '';
+          if (ai) await navigator.clipboard.writeText(ai);
+        });
+      });
+
+      list.querySelectorAll('.ea-btn-apply').forEach((btn, idx) => {
+        btn.addEventListener('click', async () => {
+          const q = questions[idx];
+          // For selection-based apply, try best-effort: use APPLY_ANSWERS_BATCH
+          const el = document.querySelector(`#ea-s-${q.id}`);
+          const ai = el ? el.querySelector('.ea-ai').textContent.trim() : '';
+          if (!ai) return;
+          chrome.runtime.sendMessage({ action: 'APPLY_ANSWERS_BATCH', data: [{ id: q.id, answer: ai }] }, (resp) => {
+            // show feedback
+            if (resp && resp.results && resp.results[0]) {
+              const ok = resp.results[0].success;
+              btn.textContent = ok ? 'Applied' : 'Failed';
+            }
+          });
+        });
+      });
+
+    } catch (e) {
+      console.error('showSelectionResultsModal error', e);
+    }
+  };
 }
