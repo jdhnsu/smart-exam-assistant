@@ -15,60 +15,44 @@ if (!window.hasExamAssistantRunning) {
 
       const div = document.createElement('div');
       div.id = 'ai-exam-assistant-status';
-      div.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        width: 12px;
-        height: 12px;
-        background: rgba(64, 158, 255, 0.15);
-        border-radius: 50%;
-        z-index: 999999;
-        cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 0 6px rgba(64, 158, 255, 0.3);
-      `;
-      
-      const playIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
-      const pauseIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
-      const nextIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>`;
-      const copyIcon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
+      div.style.cssText = 'position:fixed;bottom:20px;right:20px;width:44px;height:44px;border-radius:10px;background:rgba(64,158,255,0.15);display:flex;align-items:center;justify-content:center;z-index:1000005;box-shadow:0 6px 18px rgba(64,158,255,0.12);transition:all .14s ease;';
 
-      div.innerHTML = `
-        <div class="ea-controls" style="display: none; position: absolute; bottom: 20px; right: 20px; flex-direction: column; gap: 6px; background: rgba(0, 0, 0, 0.85); padding: 8px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); pointer-events: auto;">
-            <button id="ea-btn-copy" title="Copy Question" style="background: rgba(230, 162, 60, 0.2); border: none; color: #E6A23C; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: all 0.2s;">
-                ${copyIcon}
-            </button>
-            <button id="ea-btn-start" title="Get Answer" style="background: rgba(103, 194, 58, 0.2); border: none; color: #67C23A; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: all 0.2s;">
-                ${playIcon}
-            </button>
-            <button id="ea-btn-pause" title="Cancel" style="background: rgba(245, 108, 108, 0.2); border: none; color: #F56C6C; cursor: pointer; padding: 6px; display: none; align-items: center; justify-content: center; border-radius: 6px; transition: all 0.2s;">
-                ${pauseIcon}
-            </button>
-            <button id="ea-btn-next" title="Next Question" style="background: rgba(64, 158, 255, 0.2); border: none; color: #409EFF; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: all 0.2s;">
-                ${nextIcon}
-            </button>
-        </div>
-      `;
+      // controls container (hidden by default)
+      this.controls = document.createElement('div');
+      this.controls.style.cssText = 'position:fixed;bottom:76px;right:20px;display:flex;flex-direction:row;gap:8px;padding:8px;border-radius:10px;background:rgba(255,255,255,0.98);box-shadow:0 8px 30px rgba(12,24,40,0.06);z-index:1000006;align-items:center;';
+      this.controls.style.display = 'none';
 
+      // create buttons
+      const makeBtn = (txt) => {
+        const b = document.createElement('button');
+        b.textContent = txt;
+        b.style.cssText = 'padding:6px 8px;border-radius:8px;border:none;background:linear-gradient(180deg,#fff,#f3f6fb);cursor:pointer;font-weight:600;box-shadow:0 2px 8px rgba(16,24,40,0.04);';
+        return b;
+      };
+
+      this.btnCopy = makeBtn('Copy');
+      this.btnStart = makeBtn('Start');
+      this.btnPause = makeBtn('Stop');
+      this.btnNext = makeBtn('Next');
+
+      this.controls.appendChild(this.btnCopy);
+      this.controls.appendChild(this.btnStart);
+      this.controls.appendChild(this.btnPause);
+      this.controls.appendChild(this.btnNext);
+
+      // small status dot inside div
+      this.statusPanel = document.createElement('div');
+      this.statusPanel.style.cssText = 'width:12px;height:12px;border-radius:50%;background:rgba(64,158,255,0.15);transition:all .14s ease;';
+      div.appendChild(this.statusPanel);
+
+      document.body.appendChild(this.controls);
       document.body.appendChild(div);
-      this.statusPanel = div;
-      this.btnCopy = div.querySelector('#ea-btn-copy');
-      this.btnStart = div.querySelector('#ea-btn-start');
-      this.btnPause = div.querySelector('#ea-btn-pause');
-      this.btnNext = div.querySelector('#ea-btn-next');
-      this.controls = div.querySelector('.ea-controls');
-      this._hideControlsTimer = null;
 
-      // Interaction Logic - Show controls on hover with delay
-      const showControls = () => {
-          if (this._hideControlsTimer) {
-              clearTimeout(this._hideControlsTimer);
-              this._hideControlsTimer = null;
-          }
-          this.controls.style.display = 'flex';
-          div.style.background = 'rgba(64, 158, 255, 0.4)';
-          div.style.boxShadow = '0 0 10px rgba(64, 158, 255, 0.6)';
+      // show/hide helpers
+      const showControls = (e) => {
+        if (this._hideControlsTimer) { clearTimeout(this._hideControlsTimer); this._hideControlsTimer = null; }
+        this.controls.style.display = 'flex';
+        div.style.background = 'rgba(64, 158, 255, 0.4)';
       };
 
       const hideControls = () => {
@@ -1218,13 +1202,34 @@ if (!window.hasExamAssistantRunning) {
       const existing = document.getElementById('ea-selection-modal');
       if (existing) existing.remove();
 
+      // Inject styles once
+      if (!document.getElementById('ea-modal-styles')) {
+        const style = document.createElement('style');
+        style.id = 'ea-modal-styles';
+        style.textContent = `
+          #ea-selection-modal{position:fixed;right:20px;top:15%;width:420px;background:linear-gradient(180deg,#ffffff,#fbfdff);padding:12px;border-radius:12px;z-index:1000006;box-shadow:0 10px 30px rgba(12,24,40,0.12);max-height:70vh;overflow:auto;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;color:#111;transition:transform .22s ease,opacity .22s ease;transform:translateY(-8px);opacity:0;border:1px solid rgba(16,24,40,0.05);backdrop-filter:blur(6px);} 
+          #ea-selection-modal.ea-open{transform:translateY(0);opacity:1;} 
+          #ea-selection-modal .ea-header{display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:1px solid #f0f3f5;margin-bottom:10px;cursor:grab;} 
+          #ea-selection-modal .ea-title{font-size:15px;font-weight:700;color:#0f1720;} 
+          #ea-selection-modal .ea-close{cursor:pointer;color:#8a8f98;font-size:18px;padding:6px;border-radius:6px;transition:background .12s ease,color .12s ease;} 
+          #ea-selection-modal .ea-close:hover{background:rgba(0,0,0,0.04);color:#333;} 
+          #ea-selection-list .ea-item{padding:10px;border:1px solid #f3f5f6;border-radius:8px;margin-bottom:8px;background:#fff;transition:box-shadow .12s;} 
+          #ea-selection-list .ea-item:hover{box-shadow:0 6px 18px rgba(16,24,40,0.06);} 
+          .ea-ai{color:#0b69ff;font-weight:600;} 
+          .ea-meta{margin-top:6px;color:#6b7280;font-size:13px;} 
+          .ea-actions{margin-top:8px;display:flex;gap:8px;} 
+          .ea-btn{background:linear-gradient(180deg,#409EFF,#1A73E8);color:#fff;border:none;padding:6px 10px;border-radius:8px;cursor:pointer;font-weight:600;} 
+          .ea-btn[disabled]{opacity:0.5;cursor:not-allowed;} 
+        `;
+        document.head.appendChild(style);
+      }
+
       const modal = document.createElement('div');
       modal.id = 'ea-selection-modal';
-      modal.style.cssText = 'position:fixed;right:20px;top:15%;width:420px;background:rgba(255,255,255,0.98);padding:12px;border-radius:10px;z-index:1000006;box-shadow:0 8px 36px rgba(0,0,0,0.18);max-height:70vh;overflow:auto;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;';
 
       const header = document.createElement('div');
-      header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding-bottom:6px;border-bottom:1px solid #eee;margin-bottom:8px;';
-      header.innerHTML = `<strong style="font-size:14px;">Selection Results</strong><div style="cursor:pointer;color:#909399;font-size:18px;">×</div>`;
+      header.className = 'ea-header';
+      header.innerHTML = `<div class="ea-title">Selection Results</div><div class="ea-close" aria-label="close">×</div>`;
       modal.appendChild(header);
 
       const list = document.createElement('div');
@@ -1232,24 +1237,96 @@ if (!window.hasExamAssistantRunning) {
 
       questions.forEach(q => {
         const item = document.createElement('div');
-        item.style.cssText = 'padding:8px;border:1px solid #f3f3f3;border-radius:6px;margin-bottom:8px;';
+        item.className = 'ea-item';
         item.id = `ea-s-${q.id}`;
-        item.innerHTML = `<div style="font-weight:600;color:#333;">${q.question.slice(0,300)}</div><div style="margin-top:6px;color:#909399;">Type: ${q.type} ${q.applySupported? '· AutoApply':''}</div><div style="margin-top:8px;color:#409EFF;">AI: <span class="ea-ai">-</span></div><div style="margin-top:8px;display:flex;gap:8px;"><button class="ea-btn-ai">Request AI</button><button class="ea-btn-copy">Copy</button><button class="ea-btn-apply" ${q.applySupported? '':'disabled'}>Apply</button></div>`;
+        item.innerHTML = `<div style="font-weight:600;color:#111;">${q.question.slice(0,300)}</div><div class="ea-meta">Type: ${q.type} ${q.applySupported? '· AutoApply':''}</div><div style="margin-top:8px;">AI: <span class="ea-ai">-</span></div><div class="ea-actions"><button class="ea-btn ea-btn-ai">Request AI</button><button class="ea-btn ea-btn-copy">Copy</button><button class="ea-btn ea-btn-apply" ${q.applySupported? '':'disabled'}>Apply</button></div>`;
         list.appendChild(item);
       });
 
       modal.appendChild(list);
-
       document.body.appendChild(modal);
 
-      // close handler
-      header.querySelector('div').onclick = () => { modal.remove(); };
+      // animate in
+      requestAnimationFrame(() => { modal.classList.add('ea-open'); });
+
+      // close helpers & cleanup
+      let isClosing = false;
+      const cleanup = () => {
+        document.removeEventListener('mousedown', onDocDown);
+        document.removeEventListener('touchstart', onDocDown);
+        document.removeEventListener('mousemove', onDragMove);
+        document.removeEventListener('mouseup', onDragEnd);
+        document.removeEventListener('touchmove', onDragMove);
+        document.removeEventListener('touchend', onDragEnd);
+      };
+
+      const closeWithAnimation = () => {
+        if (isClosing) return;
+        isClosing = true;
+        modal.classList.remove('ea-open');
+        const onEnd = () => { cleanup(); if (modal && modal.parentNode) modal.parentNode.removeChild(modal); modal.removeEventListener('transitionend', onEnd); };
+        modal.addEventListener('transitionend', onEnd);
+        // fallback removal
+        setTimeout(() => { if (modal && modal.parentNode) modal.parentNode.removeChild(modal); cleanup(); }, 400);
+      };
+
+      const onDocDown = (e) => {
+        try {
+          if (!modal.contains(e.target)) {
+            closeWithAnimation();
+          }
+        } catch (err) { /* ignore */ }
+      };
+
+      document.addEventListener('mousedown', onDocDown);
+      document.addEventListener('touchstart', onDocDown);
+
+      // header close click
+      header.querySelector('.ea-close').addEventListener('click', closeWithAnimation);
+
+      // Drag to reposition
+      let dragging = false;
+      let dragOffsetX = 0;
+      let dragOffsetY = 0;
+      const onDragStart = (evt) => {
+        dragging = true;
+        const rect = modal.getBoundingClientRect();
+        const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+        const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+        dragOffsetX = clientX - rect.left;
+        dragOffsetY = clientY - rect.top;
+        modal.style.transition = 'none';
+        document.addEventListener('mousemove', onDragMove);
+        document.addEventListener('mouseup', onDragEnd);
+        document.addEventListener('touchmove', onDragMove, {passive:false});
+        document.addEventListener('touchend', onDragEnd);
+      };
+      const onDragMove = (evt) => {
+        if (!dragging) return;
+        evt.preventDefault();
+        const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+        const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+        let left = clientX - dragOffsetX;
+        let top = clientY - dragOffsetY;
+        // constrain to viewport
+        const pad = 8;
+        const w = modal.offsetWidth, h = modal.offsetHeight;
+        left = Math.max(pad, Math.min(window.innerWidth - w - pad, left));
+        top = Math.max(pad, Math.min(window.innerHeight - h - pad, top));
+        modal.style.left = left + 'px';
+        modal.style.top = top + 'px';
+        modal.style.right = 'auto';
+        modal.style.transform = 'none';
+        modal.style.opacity = '1';
+      };
+      const onDragEnd = () => { dragging = false; modal.style.transition = ''; document.removeEventListener('mousemove', onDragMove); document.removeEventListener('mouseup', onDragEnd); document.removeEventListener('touchmove', onDragMove); document.removeEventListener('touchend', onDragEnd); };
+      header.addEventListener('mousedown', onDragStart);
+      header.addEventListener('touchstart', onDragStart, {passive:true});
 
       // wire buttons
       list.querySelectorAll('.ea-btn-ai').forEach((btn, idx) => {
         btn.addEventListener('click', () => {
           const q = questions[idx];
-          // call background batch for single question
           chrome.runtime.sendMessage({ action: 'GET_AI_ANSWERS_BATCH', data: [q] }, (resp) => {
             if (resp && resp.results && resp.results[0]) {
               const r = resp.results[0];
@@ -1272,12 +1349,10 @@ if (!window.hasExamAssistantRunning) {
       list.querySelectorAll('.ea-btn-apply').forEach((btn, idx) => {
         btn.addEventListener('click', async () => {
           const q = questions[idx];
-          // For selection-based apply, try best-effort: use APPLY_ANSWERS_BATCH
           const el = document.querySelector(`#ea-s-${q.id}`);
           const ai = el ? el.querySelector('.ea-ai').textContent.trim() : '';
           if (!ai) return;
           chrome.runtime.sendMessage({ action: 'APPLY_ANSWERS_BATCH', data: [{ id: q.id, answer: ai }] }, (resp) => {
-            // show feedback
             if (resp && resp.results && resp.results[0]) {
               const ok = resp.results[0].success;
               btn.textContent = ok ? 'Applied' : 'Failed';
