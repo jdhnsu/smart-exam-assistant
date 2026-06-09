@@ -4,10 +4,12 @@ if (!window.hasExamAssistantRunning) {
   class ExamAssistant {
     constructor() {
       this.isRunning = false;
+      this.autoMode = false;
       this.statusPanel = null;
       this._lastCopiedQuestion = null;
       this._skipDebugMode = false; // Flag to temporarily skip debug mode
       this.createStatusPanel();
+      this.loadAutoMode();
     }
 
     createStatusPanel() {
@@ -34,11 +36,13 @@ if (!window.hasExamAssistantRunning) {
       this.btnStart = makeBtn('Start');
       this.btnPause = makeBtn('Stop');
       this.btnNext = makeBtn('Next');
+      this.btnAuto = makeBtn('Auto');
 
       this.controls.appendChild(this.btnCopy);
       this.controls.appendChild(this.btnStart);
       this.controls.appendChild(this.btnPause);
       this.controls.appendChild(this.btnNext);
+      this.controls.appendChild(this.btnAuto);
 
       // small status dot inside div
       this.statusPanel = document.createElement('div');
@@ -77,7 +81,7 @@ if (!window.hasExamAssistantRunning) {
       this.controls.addEventListener('mouseleave', hideControls);
 
       // Button hover effects
-      [this.btnCopy, this.btnStart, this.btnPause, this.btnNext].forEach(btn => {
+      [this.btnCopy, this.btnStart, this.btnPause, this.btnNext, this.btnAuto].forEach(btn => {
           if (!btn) return;
           btn.addEventListener('mouseenter', () => {
               btn.style.transform = 'scale(1.1)';
@@ -93,6 +97,41 @@ if (!window.hasExamAssistantRunning) {
       this.btnStart.onclick = (e) => { e.stopPropagation(); this.start(); };
       this.btnPause.onclick = (e) => { e.stopPropagation(); this.stop(); };
       this.btnNext.onclick = (e) => { e.stopPropagation(); this.goToNextQuestion(); };
+      this.btnAuto.onclick = (e) => { e.stopPropagation(); this.toggleAutoMode(); };
+      this.updateAutoButtonState();
+    }
+
+    loadAutoMode() {
+      chrome.storage.sync.get(['autoMode'], (result) => {
+        this.autoMode = !!result.autoMode;
+        this.updateAutoButtonState();
+      });
+    }
+
+    updateAutoButtonState() {
+      if (!this.btnAuto) return;
+
+      this.btnAuto.textContent = this.autoMode ? 'Auto On' : 'Auto Off';
+      this.btnAuto.style.opacity = '0.95';
+
+      if (this.autoMode) {
+        this.btnAuto.style.background = 'linear-gradient(180deg,#67c23a,#4ea72e)';
+        this.btnAuto.style.color = '#fff';
+        this.btnAuto.style.boxShadow = '0 4px 12px rgba(103,194,58,0.28)';
+      } else {
+        this.btnAuto.style.background = 'linear-gradient(180deg,#fff,#f3f6fb)';
+        this.btnAuto.style.color = '#303133';
+        this.btnAuto.style.boxShadow = '0 2px 8px rgba(16,24,40,0.04)';
+      }
+    }
+
+    toggleAutoMode() {
+      const nextValue = !this.autoMode;
+      chrome.storage.sync.set({ autoMode: nextValue }, () => {
+        this.autoMode = nextValue;
+        this.updateAutoButtonState();
+        this.updateStatus(this.autoMode ? 'Auto mode enabled' : 'Auto mode disabled', this.autoMode ? '#67C23A' : '#909399');
+      });
     }
 
     updateStatus(text, color = 'white') {
@@ -154,7 +193,7 @@ if (!window.hasExamAssistantRunning) {
       if (this.isRunning) return;
       this.isRunning = true;
       this._skipDebugMode = false; // Reset flag when starting normally
-      this.updateStatus("Started", "#409EFF");
+      this.updateStatus(this.autoMode ? "Started (Auto)" : "Started", "#409EFF");
 
       if (this.btnStart) {
           this.btnStart.style.display = 'none';
@@ -168,7 +207,7 @@ if (!window.hasExamAssistantRunning) {
       if (this.isRunning) return;
       this.isRunning = true;
       this._skipDebugMode = true; // Set flag to skip debug mode
-      this.updateStatus("Started (Debug Mode Disabled)", "#409EFF");
+      this.updateStatus(this.autoMode ? "Started (Auto, Debug Disabled)" : "Started (Debug Mode Disabled)", "#409EFF");
 
       if (this.btnStart) {
           this.btnStart.style.display = 'none';
@@ -215,6 +254,8 @@ if (!window.hasExamAssistantRunning) {
         this.stop(); // Stop if we can't read the question
         return;
       }
+
+      const currentSignature = this.getQuestionSignature(questionEl, data);
 
       // For short-answer questions, check if input element exists
       if (data.type === 'short-answer' && !data.inputElement) {
@@ -276,10 +317,16 @@ if (!window.hasExamAssistantRunning) {
         }
 
         if (success) {
-          const msg = data.type === 'short-answer' ? "Answer filled. Click Next manually." : "Answered. Click Next manually.";
-          this.updateStatus(msg, "#67C23A");
-          // Stop automatically after answering one question
-          this.stop();
+          if (this.autoMode) {
+            const msg = data.type === 'short-answer' ? "Answer filled. Auto: waiting before next..." : "Answered. Auto: waiting before next...";
+            this.updateStatus(msg, "#67C23A");
+            await this.continueAutoFlow(currentSignature);
+          } else {
+            const msg = data.type === 'short-answer' ? "Answer filled. Click Next manually." : "Answered. Click Next manually.";
+            this.updateStatus(msg, "#67C23A");
+            // Stop automatically after answering one question
+            this.stop();
+          }
         } else {
           const errorMsg = data.type === 'short-answer' ? "Could not fill answer" : `Could not select option ${answer}`;
           this.updateStatus(errorMsg, "red");
@@ -290,6 +337,34 @@ if (!window.hasExamAssistantRunning) {
         this.updateStatus(`Error: ${err.message || err}`, "red");
         this.stop();
       }
+    }
+
+    async continueAutoFlow(previousSignature) {
+      if (!this.isRunning) return;
+
+      await this.sleep(this.getAutoNextDelay());
+      if (!this.isRunning) return;
+
+      const moved = this.goToNextQuestion(true);
+      if (!moved) {
+        this.updateStatus("Auto stopped: could not find next question button", "red");
+        this.stop();
+        return;
+      }
+
+      const changed = await this.waitForQuestionChange(previousSignature);
+      if (!this.isRunning) return;
+
+      if (!changed) {
+        this.updateStatus("Auto stopped: next question did not load", "red");
+        this.stop();
+        return;
+      }
+
+      this.updateStatus("Auto: question loaded, continuing...", "#67C23A");
+      await this.sleep(this.getAutoSettleDelay());
+      if (!this.isRunning) return;
+      setTimeout(() => this.processLoop(), 0);
     }
 
     findCurrentQuestion() {
@@ -509,7 +584,7 @@ if (!window.hasExamAssistantRunning) {
 
     async isDebugMode() {
         // If skipDebugMode flag is set, return false to skip debug mode
-        if (this._skipDebugMode) {
+        if (this._skipDebugMode || this.autoMode) {
           return false;
         }
 
@@ -865,8 +940,70 @@ if (!window.hasExamAssistantRunning) {
       }
     }
 
-    goToNextQuestion() {
-      this.updateStatus("Clicking Next...", "#909399");
+    getQuestionSignature(questionEl, data = null) {
+      const activeNum = document.querySelector('.q-num-box.haveActive');
+      const activeIndex = activeNum ? activeNum.innerText.trim() : '';
+
+      if (!questionEl) {
+        return `active:${activeIndex}|empty`;
+      }
+
+      const questionData = data || this.extractQuestionData(questionEl);
+      const questionText = questionData && questionData.question
+        ? questionData.question
+        : ((questionEl.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 300));
+      const type = questionData && questionData.type ? questionData.type : '';
+
+      return `active:${activeIndex}|type:${type}|text:${questionText}`;
+    }
+
+    waitForQuestionChange(previousSignature, timeoutMs = 5000, intervalMs = 150) {
+      return new Promise((resolve) => {
+        const startTime = Date.now();
+
+        const poll = () => {
+          if (!this.isRunning) {
+            resolve(false);
+            return;
+          }
+
+          const questionEl = this.findCurrentQuestion();
+          const currentSignature = this.getQuestionSignature(questionEl);
+          if (questionEl && currentSignature !== previousSignature) {
+            resolve(true);
+            return;
+          }
+
+          if (Date.now() - startTime >= timeoutMs) {
+            resolve(false);
+            return;
+          }
+
+          setTimeout(poll, intervalMs);
+        };
+
+        poll();
+      });
+    }
+
+    sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    getRandomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    getAutoNextDelay() {
+      return this.getRandomInt(800, 1500);
+    }
+
+    getAutoSettleDelay() {
+      return this.getRandomInt(250, 450);
+    }
+
+    goToNextQuestion(isAutoFlow = false) {
+      this.updateStatus(isAutoFlow ? "Auto: clicking next..." : "Clicking Next...", "#909399");
       
       // Strategy 1: Find "下一题" text
       const spans = Array.from(document.querySelectorAll('span, div, button, a'));
@@ -879,7 +1016,7 @@ if (!window.hasExamAssistantRunning) {
 
       if (nextBtnText) {
         // Try clicking the element itself or its parents
-        if (this.clickElementOrParent(nextBtnText)) return;
+        if (this.clickElementOrParent(nextBtnText)) return true;
       }
 
       // Strategy 2: Sidebar numbers (.q-num-box)
@@ -889,13 +1026,14 @@ if (!window.hasExamAssistantRunning) {
         // Try next sibling
         const nextNum = activeNum.nextElementSibling;
         if (nextNum && nextNum.classList.contains('q-num-box')) {
-          this.updateStatus("Using sidebar navigation...", "#909399");
+          this.updateStatus(isAutoFlow ? "Auto: using sidebar navigation..." : "Using sidebar navigation...", "#909399");
           nextNum.click();
-          return;
+          return true;
         }
       }
       
       this.updateStatus("Could not find next question button", "red");
+      return false;
     }
 
     clickElementOrParent(el, depth = 3) {
