@@ -1,5 +1,13 @@
 # AGENTS.md
 
+## Agent Instructions
+- **Edit method**: Use the repository `apply_patch` workflow to change files (do not output full-file copies in chat).
+- **Verification**: Load the repo as an unpacked extension in chrome://extensions/ and test changes manually; there is no build step.
+- **Do not invent**: Do not add `package.json`, CI, or automated test scaffolding; this repo is validated in the browser.
+- **Secrets**: Do not commit API keys or secrets. If a key is required, ask the user how they want to supply it (they may store it in Chrome extension settings at runtime).
+- **Site testing**: If you modify selectors in `content.js`, test them against the live site `https://study.nsu.edu.cn/*` before committing.
+
+
 ## Repo Shape
 - This repo is a plain Chrome Extension Manifest V3 project. There is no `package.json`, lockfile, CI, test runner, formatter, or typecheck setup.
 - Main entrypoints are `manifest.json`, `content.js`, `background.js`, `popup.html`, and `popup.js`.
