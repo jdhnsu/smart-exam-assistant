@@ -21,12 +21,20 @@
       <option value="openai">OpenAI (GPT)</option>
       <option value="gemini">Google Gemini</option>
       <option value="qwen">Qwen (DashScope)</option>
+      <option value="deepseek">DeepSeek</option>
+      <option value="glm">GLM (BigModel)</option>
     </select>
   </div>
 
   <div class="group">
     <label>API Key</label>
     <input type="password" id="apiKey" placeholder="sk-...">
+  </div>
+
+  <div class="group">
+    <label>API URL (Optional)</label>
+    <input type="text" id="apiUrl" placeholder="Leave blank for default URL">
+    <small style="color: #909399; font-size: 11px;">Custom API endpoint. Leave empty to use default.</small>
   </div>
 
   <div class="group">
@@ -46,7 +54,9 @@
   </div>
 
   <button id="saveBtn">Save Settings</button>
-  <div id="status"></div>
+  <button id="testBtn" style="background:#67C23A; margin-top: 8px;">Test Connection</button>
+  <div id="testResult" style="margin-top: 10px; padding: 8px; border-radius: 4px; font-size: 12px; display: none;"></div>
+  <div id="status" style="margin-top: 10px; font-size: 12px; color: #666; text-align: center;"></div>
   
   <hr style="margin:12px 0;">
   <h4>Detected Questions</h4>
