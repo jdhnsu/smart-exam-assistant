@@ -1,11 +1,13 @@
 document.addEventListener('DOMContentLoaded', function () {
-  chrome.storage.sync.get(['provider', 'apiKey', 'apiUrl', 'modelName', 'debugMode', 'shortAnswerPrompt'], function (result) {
+  chrome.storage.sync.get(['provider', 'apiKey', 'apiUrl', 'modelName', 'debugMode', 'shortAnswerPrompt', 'boxSelectPrompt', 'showFloatingWidget'], function (result) {
     if (result.provider) document.getElementById('provider').value = result.provider;
     if (result.apiKey) document.getElementById('apiKey').value = result.apiKey;
     if (result.apiUrl) document.getElementById('apiUrl').value = result.apiUrl;
     if (result.modelName) document.getElementById('modelName').value = result.modelName;
     if (result.debugMode) document.getElementById('debugMode').checked = result.debugMode;
     if (result.shortAnswerPrompt) document.getElementById('shortAnswerPrompt').value = result.shortAnswerPrompt;
+    if (result.boxSelectPrompt) document.getElementById('boxSelectPrompt').value = result.boxSelectPrompt;
+    if (result.showFloatingWidget !== undefined) document.getElementById('showFloatingWidget').checked = result.showFloatingWidget;
   });
 
   document.getElementById('saveBtn').addEventListener('click', function () {
@@ -15,13 +17,24 @@ document.addEventListener('DOMContentLoaded', function () {
     var modelName = document.getElementById('modelName').value;
     var debugMode = document.getElementById('debugMode').checked;
     var shortAnswerPrompt = document.getElementById('shortAnswerPrompt').value.trim();
+    var boxSelectPrompt = document.getElementById('boxSelectPrompt').value.trim();
+    var showFloatingWidget = document.getElementById('showFloatingWidget').checked;
 
     if (!apiKey) {
       showStatus('Please enter an API Key', 'red');
       return;
     }
 
-    chrome.storage.sync.set({ provider: provider, apiKey: apiKey, apiUrl: apiUrl, modelName: modelName, debugMode: debugMode, shortAnswerPrompt: shortAnswerPrompt }, function () {
+    chrome.storage.sync.set({ 
+      provider: provider, 
+      apiKey: apiKey, 
+      apiUrl: apiUrl, 
+      modelName: modelName, 
+      debugMode: debugMode, 
+      shortAnswerPrompt: shortAnswerPrompt,
+      boxSelectPrompt: boxSelectPrompt,
+      showFloatingWidget: showFloatingWidget
+    }, function () {
       showStatus('Settings Saved!', 'green');
     });
   });

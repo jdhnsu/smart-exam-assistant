@@ -140,175 +140,26 @@ EA.UI = {
       if (this.btnPause) this.btnPause.style.display = 'none';
     };
 
+    panel.show = function () {
+      div.style.display = 'flex';
+      panel.controls.style.display = 'none';
+    };
+
+    panel.hide = function () {
+      div.style.display = 'none';
+      panel.controls.style.display = 'none';
+    };
+
     return panel;
   },
 
-  createDebugModal(title, data, answer) {
-    return new Promise(function (resolve) {
-      var existing = document.getElementById('ai-exam-debug-modal');
-      if (existing) existing.remove();
+  // 统一的弹窗工厂函数
+  _createDebugModalBase: function (title, data, options) {
+    options = options || {};
+    var isLive = options.isLive || false;
+    var existingAnswer = options.answer || null;
+    var existingExplanation = options.explanation || null;
 
-      EA.Utils.storageGetLocal([EA.StorageKeys.DEBUG_MODAL_POS]).then(function (res) {
-        var pos = res[EA.StorageKeys.DEBUG_MODAL_POS] || { top: '15%', right: '20px', left: 'auto' };
-
-        var modal = document.createElement('div');
-        modal.id = 'ai-exam-debug-modal';
-        modal.style.cssText =
-          'position:fixed;' +
-          'top:' + pos.top + ';' +
-          'left:' + pos.left + ';' +
-          'right:' + pos.right + ';' +
-          'width:350px;' +
-          'background:rgba(255,255,255,0.95);' +
-          'padding:0;' +
-          'border-radius:12px;' +
-          'box-shadow:0 4px 20px rgba(0,0,0,0.15);' +
-          'z-index:1000000;' +
-          'max-height:70vh;' +
-          'display:flex;' +
-          'flex-direction:column;' +
-          'color:#333;' +
-          'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
-          'font-size:13px;' +
-          'border:1px solid rgba(0,0,0,0.1);' +
-          'backdrop-filter:blur(10px);' +
-          'transform:translateY(0);' +
-          'transition:opacity 0.3s;';
-
-        var optionsHtml = data.options.map(function (o) {
-          var isSelected = answer && answer.includes(o.letter);
-          var bg = isSelected ? '#f0f9eb' : 'transparent';
-          var border = isSelected ? '1px solid #67c23a' : '1px solid transparent';
-          var color = isSelected ? '#67c23a' : '#606266';
-          return '<div style="background:' + bg + ';border:' + border + ';color:' + color + ';padding:6px;margin-bottom:4px;border-radius:6px;display:flex;gap:6px;">' +
-            '<span style="font-weight:bold;">' + o.letter + '.</span>' +
-            '<span>' + o.text + '</span>' +
-            '</div>';
-        }).join('');
-
-        var answerHtml = answer ?
-          '<div style="margin:10px 0;padding:8px 12px;background:#ecf5ff;border-radius:6px;color:#409eff;display:flex;align-items:center;justify-content:space-between;">' +
-          '<span style="font-weight:bold;">AI Suggestion:</span>' +
-          '<span style="font-size:1.4em;font-weight:bold;">' + answer + '</span>' +
-          '</div>' : '';
-
-        modal.innerHTML =
-          '<div id="debug-header" style="padding:12px 15px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;cursor:move;background:rgba(248,249,250,0.8);border-radius:12px 12px 0 0;user-select:none;">' +
-          '<div style="display:flex;align-items:center;gap:6px;">' +
-          '<span style="width:8px;height:8px;background:#409eff;border-radius:50%;"></span>' +
-          '<h3 style="margin:0;font-size:13px;font-weight:600;">' + title + '</h3>' +
-          '</div>' +
-          '<div style="font-size:16px;color:#909399;cursor:pointer;padding:0 4px;" id="debug-close">\u00d7</div>' +
-          '</div>' +
-          '<div style="padding:15px;overflow-y:auto;max-height:calc(70vh - 100px);">' +
-          '<div style="background:#f5f7fa;padding:10px;margin-bottom:10px;border-radius:6px;line-height:1.4;">' +
-          data.question +
-          '</div>' +
-          answerHtml +
-          '<div style="margin-bottom:15px;">' +
-          optionsHtml +
-          '</div>' +
-          '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
-          '<button id="debug-cancel" style="padding:6px 12px;background:#f56c6c;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Stop</button>' +
-          '<button id="debug-confirm" style="padding:6px 12px;background:#409eff;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;">' +
-          (answer ? 'Apply' : 'Confirm') +
-          '</button>' +
-          '</div>' +
-          '</div>';
-
-        document.body.appendChild(modal);
-
-        var header = modal.querySelector('#debug-header');
-        var isDragging = false;
-        var startX, startY, initialLeft, initialTop;
-
-        header.onmousedown = function (e) {
-          isDragging = true;
-          startX = e.clientX;
-          startY = e.clientY;
-          var rect = modal.getBoundingClientRect();
-          initialLeft = rect.left;
-          initialTop = rect.top;
-          modal.style.right = 'auto';
-          modal.style.width = rect.width + 'px';
-        };
-
-        document.onmousemove = function (e) {
-          if (!isDragging) return;
-          e.preventDefault();
-          var dx = e.clientX - startX;
-          var dy = e.clientY - startY;
-          var newLeft = initialLeft + dx;
-          var newTop = initialTop + dy;
-          var maxLeft = window.innerWidth - modal.offsetWidth;
-          var maxTop = window.innerHeight - modal.offsetHeight;
-          if (newLeft < 0) newLeft = 0;
-          if (newTop < 0) newTop = 0;
-          if (newLeft > maxLeft) newLeft = maxLeft;
-          if (newTop > maxTop) newTop = maxTop;
-          modal.style.left = newLeft + 'px';
-          modal.style.top = newTop + 'px';
-        };
-
-        document.onmouseup = function () {
-          if (isDragging) {
-            isDragging = false;
-            EA.Utils.storageSetLocal({
-              debugModalPos: {
-                top: modal.style.top,
-                left: modal.style.left,
-                right: 'auto'
-              }
-            });
-          }
-        };
-
-        var outsideClickListener = function (e) {
-          if (modal && !modal.contains(e.target)) {
-            cleanup();
-            resolve(false);
-          }
-        };
-
-        var keyDownListener = function (e) {
-          if (e.altKey && e.key.toLowerCase() === 't') {
-            cleanup();
-            resolve(false);
-          }
-        };
-
-        setTimeout(function () {
-          document.addEventListener('click', outsideClickListener);
-          document.addEventListener('keydown', keyDownListener);
-        }, 100);
-
-        var cleanup = function () {
-          if (document.body.contains(modal)) modal.remove();
-          document.removeEventListener('click', outsideClickListener);
-          document.removeEventListener('keydown', keyDownListener);
-          document.onmousemove = null;
-          document.onmouseup = null;
-        };
-
-        document.getElementById('debug-confirm').onclick = function () {
-          cleanup();
-          resolve(true);
-        };
-
-        document.getElementById('debug-cancel').onclick = function () {
-          cleanup();
-          resolve(false);
-        };
-
-        document.getElementById('debug-close').onclick = function () {
-          cleanup();
-          resolve(false);
-        };
-      });
-    });
-  },
-
-  createDebugModalLive: function (title, data) {
     var injectKeyframes = function () {
       if (document.getElementById('ea-debug-spin-style')) return;
       var ks = document.createElement('style');
@@ -331,63 +182,87 @@ EA.UI = {
         'top:' + pos.top + ';' +
         'left:' + pos.left + ';' +
         'right:' + pos.right + ';' +
-        'width:350px;' +
-        'background:rgba(255,255,255,0.95);' +
+        'width:380px;' +
+        'background:rgba(255,255,255,0.98);' +
         'padding:0;' +
         'border-radius:12px;' +
-        'box-shadow:0 4px 20px rgba(0,0,0,0.15);' +
+        'box-shadow:0 8px 32px rgba(0,0,0,0.12);' +
         'z-index:1000001;' +
-        'max-height:70vh;' +
+        'max-height:75vh;' +
         'display:flex;' +
         'flex-direction:column;' +
         'color:#333;' +
         'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
         'font-size:13px;' +
-        'border:1px solid rgba(0,0,0,0.1);' +
-        'backdrop-filter:blur(10px);' +
+        'border:1px solid rgba(0,0,0,0.08);' +
+        'backdrop-filter:blur(12px);' +
         'transform:translateY(0);' +
         'transition:opacity 0.3s;';
 
-      var optionsHtmlNoHighlight = data.options.map(function (o) {
-        return '<div style="background:transparent;border:1px solid transparent;color:#606266;padding:6px;margin-bottom:4px;border-radius:6px;display:flex;gap:6px;" class="ea-debug-option" data-letter="' + o.letter + '">' +
-          '<span style="font-weight:bold;">' + o.letter + '.</span>' +
-          '<span>' + o.text + '</span>' +
+      // 构建选项 HTML
+      var optionsHtml = data.options.map(function (o) {
+        return '<div style="background:transparent;border:1px solid transparent;color:#606266;padding:8px 10px;margin-bottom:6px;border-radius:6px;display:flex;gap:8px;transition:all 0.2s;" class="ea-debug-option" data-letter="' + o.letter + '">' +
+          '<span style="font-weight:600;min-width:20px;">' + o.letter + '.</span>' +
+          '<span style="flex:1;">' + o.text + '</span>' +
           '</div>';
       }).join('');
 
-      var loadingHtml =
-        '<div id="debug-answer-area" style="margin:10px 0;padding:10px 12px;background:#fdf6ec;border-radius:6px;display:flex;align-items:center;gap:10px;">' +
-        '<span style="display:inline-block;width:20px;height:20px;border:2.5px solid #E6A23C;border-top-color:transparent;border-radius:50%;animation:ea-debug-spin 0.7s linear infinite;"></span>' +
-        '<span style="color:#E6A23C;font-weight:600;">AI is thinking...</span>' +
-        '</div>';
+      // 构建答案区域 HTML
+      var answerAreaHtml = '';
+      if (isLive) {
+        // 动态模式：显示加载状态
+        answerAreaHtml =
+          '<div id="debug-answer-area" style="margin:12px 0;padding:12px 14px;background:linear-gradient(135deg,#fdf6ec 0%,#fef9f3 100%);border-radius:8px;display:flex;align-items:center;gap:12px;border:1px solid rgba(230,162,60,0.15);">' +
+          '<span style="display:inline-block;width:22px;height:22px;border:2.5px solid #E6A23C;border-top-color:transparent;border-radius:50%;animation:ea-debug-spin 0.7s linear infinite;flex-shrink:0;"></span>' +
+          '<span style="color:#E6A23C;font-weight:600;font-size:13px;">AI is analyzing...</span>' +
+          '</div>';
+      } else if (existingAnswer) {
+        // 静态模式：显示已有答案
+        answerAreaHtml =
+          '<div id="debug-answer-area" style="margin:12px 0;padding:12px 14px;background:linear-gradient(135deg,#ecf5ff 0%,#f0f8ff 100%);border-radius:8px;border:1px solid rgba(64,158,255,0.15);">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+          '<span style="font-weight:600;color:#409eff;font-size:13px;">AI Answer</span>' +
+          '<span style="font-size:1.5em;font-weight:700;color:#409eff;letter-spacing:1px;">' + existingAnswer + '</span>' +
+          '</div>' +
+          '</div>';
+      }
 
+      // 构建解释区域 HTML（初始隐藏）
+      var explanationAreaHtml =
+        '<div id="debug-explanation-area" style="margin:10px 0;padding:12px 14px;background:linear-gradient(135deg,#f9fafb 0%,#f4f5f7 100%);border-radius:8px;display:none;color:#606266;font-size:12px;line-height:1.6;border:1px solid rgba(144,147,153,0.1);"></div>';
+
+      // 按钮 HTML
+      var confirmLabel = data.applySupported ? 'Apply' : 'Confirm';
       var buttonsHtml =
-        '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
-        '<button id="debug-cancel" style="padding:6px 12px;background:#f56c6c;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Stop</button>' +
-        '<button id="debug-confirm" style="padding:6px 12px;background:#409eff;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;opacity:0.5;" disabled>Waiting...</button>' +
+        '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">' +
+        '<button id="debug-cancel" style="padding:8px 16px;background:linear-gradient(180deg,#f56c6c,#e85a5a);color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.2s;box-shadow:0 2px 8px rgba(245,108,108,0.2);">Stop</button>' +
+        '<button id="debug-confirm" style="padding:8px 16px;background:linear-gradient(180deg,#409eff,#1a73e8);color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.2s;box-shadow:0 2px 8px rgba(64,158,255,0.25);' + (isLive ? 'opacity:0.5;' : '') + '" ' + (isLive ? 'disabled' : '') + '>' + (isLive ? 'Waiting...' : confirmLabel) + '</button>' +
         '</div>';
 
+      // 组装完整 HTML
       modal.innerHTML =
-        '<div id="debug-header" style="padding:12px 15px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;cursor:move;background:rgba(248,249,250,0.8);border-radius:12px 12px 0 0;user-select:none;">' +
-        '<div style="display:flex;align-items:center;gap:6px;">' +
-        '<span style="width:8px;height:8px;background:#E6A23C;border-radius:50%;"></span>' +
-        '<h3 style="margin:0;font-size:13px;font-weight:600;">' + title + '</h3>' +
+        '<div id="debug-header" style="padding:14px 16px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;cursor:move;background:linear-gradient(180deg,#fafbfc 0%,#f5f7fa 100%);border-radius:12px 12px 0 0;user-select:none;">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<span style="width:10px;height:10px;background:' + (isLive ? '#E6A23C' : (existingAnswer ? '#67c23a' : '#909399')) + ';border-radius:50%;box-shadow:0 0 8px ' + (isLive ? 'rgba(230,162,60,0.4)' : (existingAnswer ? 'rgba(103,194,58,0.4)' : 'rgba(144,147,153,0.3)')) + ';transition:all 0.3s;"></span>' +
+        '<h3 style="margin:0;font-size:14px;font-weight:600;color:#0f1720;">' + title + '</h3>' +
         '</div>' +
-        '<div style="font-size:16px;color:#909399;cursor:pointer;padding:0 4px;" id="debug-close">\u00d7</div>' +
+        '<div style="font-size:18px;color:#909399;cursor:pointer;padding:2px 6px;border-radius:4px;transition:all 0.2s;" id="debug-close" onmouseover="this.style.background=\'rgba(0,0,0,0.05)\'" onmouseout="this.style.background=\'transparent\'">\u00d7</div>' +
         '</div>' +
-        '<div style="padding:15px;overflow-y:auto;max-height:calc(70vh - 100px);">' +
-        '<div style="background:#f5f7fa;padding:10px;margin-bottom:10px;border-radius:6px;line-height:1.4;">' +
+        '<div style="padding:18px;overflow-y:auto;max-height:calc(75vh - 120px);">' +
+        '<div style="background:linear-gradient(135deg,#f5f7fa 0%,#fafbfc 100%);padding:12px 14px;margin-bottom:14px;border-radius:8px;line-height:1.6;color:#303133;font-size:13px;border:1px solid rgba(0,0,0,0.05);">' +
         data.question +
         '</div>' +
-        loadingHtml +
-        '<div style="margin-bottom:15px;" id="debug-options-area">' +
-        optionsHtmlNoHighlight +
+        answerAreaHtml +
+        explanationAreaHtml +
+        '<div style="margin-bottom:16px;" id="debug-options-area">' +
+        optionsHtml +
         '</div>' +
         buttonsHtml +
         '</div>';
 
       document.body.appendChild(modal);
 
+      // 拖拽功能
       var header = modal.querySelector('#debug-header');
       var isDragging = false;
       var startX, startY, initialLeft, initialTop;
@@ -433,15 +308,14 @@ EA.UI = {
         }
       };
 
-      var confirmed = false;
+      // 事件监听和清理
       var settled = false;
-
       var resolveFn = null;
       var confirmPromise = new Promise(function (res) { resolveFn = res; });
 
       var cleanup = function () {
         if (document.body.contains(modal)) modal.remove();
-        document.removeEventListener('click', outsideClickListener);
+        document.removeEventListener('mousedown', outsideClickListener, true);
         document.removeEventListener('keydown', keyDownListener);
         document.onmousemove = null;
         document.onmouseup = null;
@@ -461,10 +335,8 @@ EA.UI = {
         }
       };
 
-      setTimeout(function () {
-        document.addEventListener('click', outsideClickListener);
-        document.addEventListener('keydown', keyDownListener);
-      }, 100);
+      document.addEventListener('mousedown', outsideClickListener, true);
+      document.addEventListener('keydown', keyDownListener);
 
       document.getElementById('debug-confirm').onclick = function () {
         if (document.getElementById('debug-confirm').disabled) return;
@@ -482,50 +354,94 @@ EA.UI = {
         if (!settled) { settled = true; resolveFn(false); }
       };
 
-      var answerEl = modal.querySelector('#debug-answer-area');
-      var confirmBtn = modal.querySelector('#debug-confirm');
-      var headerDot = header.querySelector('span');
-      var confirmLabel = data.applySupported ? 'Apply' : 'Confirm';
+      // 返回更新函数（仅用于动态模式）
+      if (isLive) {
+        var answerEl = modal.querySelector('#debug-answer-area');
+        var confirmBtn = modal.querySelector('#debug-confirm');
+        var headerDot = header.querySelector('span');
+        var confirmLabel = data.applySupported ? 'Apply' : 'Confirm';
 
-      return {
-        updateAnswer: function (answer) {
-          if (!answer) {
+        return {
+          updateAnswer: function (answer, explanation) {
+            if (!answer) {
+              answerEl.innerHTML =
+                '<div style="display:flex;align-items:center;gap:10px;">' +
+                '<span style="color:#909399;">No answer from AI</span>' +
+                '</div>';
+              confirmBtn.textContent = confirmLabel;
+              confirmBtn.disabled = false;
+              confirmBtn.style.opacity = '1';
+              if (headerDot) {
+                headerDot.style.background = '#909399';
+                headerDot.style.boxShadow = '0 0 8px rgba(144,147,153,0.3)';
+              }
+              return;
+            }
+
+            // 更新答案区域
             answerEl.innerHTML =
-              '<div style="display:flex;align-items:center;gap:10px;">' +
-              '<span style="color:#909399;">No answer from AI</span>' +
+              '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+              '<span style="font-weight:600;color:#409eff;font-size:13px;">AI Answer</span>' +
+              '<span style="font-size:1.5em;font-weight:700;color:#409eff;letter-spacing:1px;">' + answer + '</span>' +
               '</div>';
+            answerEl.style.background = 'linear-gradient(135deg,#ecf5ff 0%,#f0f8ff 100%)';
+            answerEl.style.border = '1px solid rgba(64,158,255,0.15)';
+
+            // 更新解释区域
+            var explanationArea = modal.querySelector('#debug-explanation-area');
+            if (explanation && explanation.length > 0) {
+              explanationArea.style.display = 'block';
+              explanationArea.innerHTML = 
+                '<div style="font-weight:600;margin-bottom:6px;color:#909399;font-size:12px;display:flex;align-items:center;gap:6px;">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' +
+                'Explanation' +
+                '</div>' +
+                '<div style="color:#606266;line-height:1.6;">' + explanation + '</div>';
+            } else {
+              explanationArea.style.display = 'none';
+            }
+
+            // 高亮选中的选项
+            var optionsEls = modal.querySelectorAll('.ea-debug-option');
+            for (var i = 0; i < optionsEls.length; i++) {
+              var opt = optionsEls[i];
+              var letter = opt.getAttribute('data-letter');
+              if (answer.indexOf(letter) !== -1) {
+                opt.style.background = 'linear-gradient(135deg,#f0f9eb 0%,#f6ffed 100%)';
+                opt.style.border = '1px solid #67c23a';
+                opt.style.color = '#67c23a';
+                opt.style.boxShadow = '0 2px 8px rgba(103,194,58,0.15)';
+              }
+            }
+
+            // 启用确认按钮
             confirmBtn.textContent = confirmLabel;
             confirmBtn.disabled = false;
             confirmBtn.style.opacity = '1';
-            if (headerDot) headerDot.style.background = '#909399';
-            return;
-          }
-
-          answerEl.innerHTML =
-            '<div style="display:flex;align-items:center;justify-content:space-between;">' +
-            '<span style="font-weight:bold;">AI Suggestion:</span>' +
-            '<span style="font-size:1.4em;font-weight:bold;color:#409eff;">' + answer + '</span>' +
-            '</div>';
-          answerEl.style.background = '#ecf5ff';
-
-          var optionsEls = modal.querySelectorAll('.ea-debug-option');
-          for (var i = 0; i < optionsEls.length; i++) {
-            var opt = optionsEls[i];
-            var letter = opt.getAttribute('data-letter');
-            if (answer.indexOf(letter) !== -1) {
-              opt.style.background = '#f0f9eb';
-              opt.style.border = '1px solid #67c23a';
-              opt.style.color = '#67c23a';
+            if (headerDot) {
+              headerDot.style.background = '#67c23a';
+              headerDot.style.boxShadow = '0 0 8px rgba(103,194,58,0.4)';
             }
-          }
+          },
+          confirmPromise: confirmPromise
+        };
+      } else {
+        // 静态模式，直接返回 Promise
+        return confirmPromise;
+      }
+    });
+  },
 
-          confirmBtn.textContent = confirmLabel;
-          confirmBtn.disabled = false;
-          confirmBtn.style.opacity = '1';
-          if (headerDot) headerDot.style.background = '#67c23a';
-        },
-        confirmPromise: confirmPromise
-      };
+  createDebugModal(title, data, answer) {
+    return this._createDebugModalBase(title, data, {
+      isLive: false,
+      answer: answer
+    });
+  },
+
+  createDebugModalLive: function (title, data) {
+    return this._createDebugModalBase(title, data, {
+      isLive: true
     });
   },
 
@@ -689,6 +605,160 @@ EA.UI = {
     } catch (e) {
       console.error('[EA] showSelectionResultsModal error', e);
     }
+  },
+
+  // 简洁的问答弹窗（用于 ALT+Q 框选搜题）
+  createSimpleAnswerModal: function (title, data) {
+    var existing = document.getElementById('ea-simple-answer-modal');
+    if (existing) existing.remove();
+
+    return EA.Utils.storageGetLocal([EA.StorageKeys.DEBUG_MODAL_POS]).then(function (res) {
+      var pos = res[EA.StorageKeys.DEBUG_MODAL_POS] || { top: '15%', right: '20px', left: 'auto' };
+
+      var modal = document.createElement('div');
+      modal.id = 'ea-simple-answer-modal';
+      modal.style.cssText =
+        'position:fixed;' +
+        'top:' + pos.top + ';' +
+        'left:' + pos.left + ';' +
+        'right:' + pos.right + ';' +
+        'width:420px;' +
+        'background:#ffffff;' +
+        'padding:0;' +
+        'border-radius:12px;' +
+        'box-shadow:0 8px 32px rgba(0,0,0,0.12);' +
+        'z-index:1000001;' +
+        'max-height:80vh;' +
+        'display:flex;' +
+        'flex-direction:column;' +
+        'color:#333;' +
+        'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
+        'font-size:13px;' +
+        'border:1px solid rgba(0,0,0,0.08);' +
+        'backdrop-filter:blur(12px);';
+
+      // 构建选项 HTML
+      var optionsHtml = '';
+      if (data.options && data.options.length > 0) {
+        optionsHtml =
+          '<div class="ea-simple-section" style="margin-bottom:16px;">' +
+          '<div class="ea-section-label" style="font-size:12px;font-weight:600;color:#909399;margin-bottom:8px;display:flex;align-items:center;gap:6px;">' +
+          '<span>📝</span><span>Options</span>' +
+          '</div>' +
+          '<div class="ea-options-list">' +
+          data.options.map(function (o) {
+            return '<div style="padding:8px 10px;margin-bottom:4px;background:#f9fafb;border-radius:6px;border:1px solid #e4e7ed;font-size:13px;line-height:1.5;">' +
+              '<span style="font-weight:600;color:#409eff;">' + o.letter + '.</span> ' +
+              '<span style="color:#606266;">' + o.text + '</span>' +
+              '</div>';
+          }).join('') +
+          '</div>' +
+          '</div>';
+      }
+
+      // 组装完整 HTML
+      modal.innerHTML =
+        '<div id="simple-header" style="padding:14px 16px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(180deg,#fafbfc 0%,#f5f7fa 100%);border-radius:12px 12px 0 0;user-select:none;">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<span style="font-size:16px;">📝</span>' +
+        '<h3 style="margin:0;font-size:14px;font-weight:600;color:#0f1720;">' + title + '</h3>' +
+        '</div>' +
+        '<div style="font-size:18px;color:#909399;cursor:pointer;padding:2px 6px;border-radius:4px;transition:all 0.2s;" id="simple-close" onmouseover="this.style.background=\'rgba(0,0,0,0.05)\'" onmouseout="this.style.background=\'transparent\'">\u00d7</div>' +
+        '</div>' +
+        '<div style="padding:18px;overflow-y:auto;max-height:calc(80vh - 120px);">' +
+        '<div class="ea-simple-section" style="margin-bottom:16px;">' +
+        '<div class="ea-section-label" style="font-size:12px;font-weight:600;color:#909399;margin-bottom:8px;display:flex;align-items:center;gap:6px;">' +
+        '<span>📋</span><span>Detected Question</span>' +
+        '</div>' +
+        '<div style="padding:12px 14px;background:linear-gradient(135deg,#f5f7fa 0%,#fafbfc 100%);border-radius:8px;line-height:1.6;color:#303133;font-size:13px;border:1px solid rgba(0,0,0,0.05);">' +
+        data.question +
+        '</div>' +
+        '</div>' +
+        optionsHtml +
+        '<hr style="border:none;border-top:1px solid #e4e7ed;margin:16px 0;">' +
+        '<div class="ea-simple-section">' +
+        '<div class="ea-section-label" style="font-size:12px;font-weight:600;color:#909399;margin-bottom:8px;display:flex;align-items:center;gap:6px;">' +
+        '<span>🤖</span><span>AI Answer</span>' +
+        '</div>' +
+        '<div id="ea-simple-loading" style="padding:20px;text-align:center;color:#909399;">' +
+        '<div style="display:inline-block;width:24px;height:24px;border:3px solid #E6A23C;border-top-color:transparent;border-radius:50%;animation:ea-debug-spin 0.7s linear infinite;"></div>' +
+        '<div style="margin-top:10px;font-size:13px;">AI is thinking...</div>' +
+        '</div>' +
+        '<div id="ea-simple-answer-text" style="padding:12px 14px;background:#ffffff;border-radius:8px;line-height:1.7;color:#303133;font-size:13px;border:1px solid rgba(0,0,0,0.08);display:none;white-space:pre-wrap;"></div>' +
+        '</div>' +
+        '</div>' +
+        '<div style="padding:12px 16px;border-top:1px solid #eee;display:flex;justify-content:flex-end;background:#fafbfc;border-radius:0 0 12px 12px;">' +
+        '<button id="simple-close-btn" style="padding:8px 20px;background:linear-gradient(180deg,#409eff,#1a73e8);color:white;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.2s;box-shadow:0 2px 8px rgba(64,158,255,0.25);">Close</button>' +
+        '</div>';
+
+      document.body.appendChild(modal);
+
+      // 关闭功能
+      var closeBtn = modal.querySelector('#simple-close');
+      var closeBtn2 = modal.querySelector('#simple-close-btn');
+      
+      var cleanup = function () {
+        if (document.body.contains(modal)) modal.remove();
+        document.removeEventListener('mousedown', outsideClickHandler, true);
+      };
+
+      closeBtn.onclick = cleanup;
+      closeBtn2.onclick = cleanup;
+
+      // 拖拽功能
+      var header = modal.querySelector('#simple-header');
+      var isDragging = false;
+      var startX, startY, initialLeft, initialTop;
+
+      header.addEventListener('mousedown', function(e) {
+        if (e.target.id === 'simple-close') return; // 排除关闭按钮
+        
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        
+        var rect = modal.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
+        
+        header.style.cursor = 'grabbing';
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        
+        var dx = e.clientX - startX;
+        var dy = e.clientY - startY;
+        
+        modal.style.left = (initialLeft + dx) + 'px';
+        modal.style.top = (initialTop + dy) + 'px';
+        modal.style.right = 'auto';
+      });
+
+      document.addEventListener('mouseup', function() {
+        if (isDragging) {
+          isDragging = false;
+          header.style.cursor = 'move';
+          
+          // 保存位置
+          var rect = modal.getBoundingClientRect();
+          EA.Utils.storageSetLocal({
+            [EA.StorageKeys.DEBUG_MODAL_POS]: {
+              top: rect.top + 'px',
+              left: rect.left + 'px',
+              right: 'auto'
+            }
+          });
+        }
+      });
+
+      // 点击外部关闭
+      var outsideClickHandler = function (e) {
+        if (!modal.contains(e.target)) cleanup();
+      };
+      document.addEventListener('mousedown', outsideClickHandler, true);
+    });
   },
 
   setupSelectionIcon(onExtract) {

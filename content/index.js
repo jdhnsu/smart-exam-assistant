@@ -24,6 +24,23 @@ if (!window.hasExamAssistantRunning) {
       e.stopPropagation();
       assistant.toggleAutoMode();
     };
+
+    chrome.storage.sync.get([EA.StorageKeys.SHOW_FLOATING_WIDGET], function (res) {
+      if (res[EA.StorageKeys.SHOW_FLOATING_WIDGET] === false) {
+        assistant.statusPanel.hide();
+      }
+    });
+
+    chrome.storage.onChanged.addListener(function (changes, areaName) {
+      if (areaName === 'sync' && changes[EA.StorageKeys.SHOW_FLOATING_WIDGET]) {
+        var val = changes[EA.StorageKeys.SHOW_FLOATING_WIDGET].newValue;
+        if (val === false) {
+          assistant.statusPanel.hide();
+        } else {
+          assistant.statusPanel.show();
+        }
+      }
+    });
   }
 
   document.addEventListener('keydown', function (e) {

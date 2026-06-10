@@ -63,7 +63,8 @@ EA.Utils = {
           reject(chrome.runtime.lastError.message);
           return;
         }
-        if (response && response.answer) {
+        // 检查 response.answer 是否存在（包括空字符串）
+        if (response && response.answer !== undefined && response.answer !== null) {
           resolve(response.answer);
         } else {
           reject(response ? response.error : 'Unknown error');

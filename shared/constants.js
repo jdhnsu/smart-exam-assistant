@@ -18,7 +18,9 @@ EA.StorageKeys = {
   MODEL_NAME: 'modelName',
   DEBUG_MODE: 'debugMode',
   SHORT_ANSWER_PROMPT: 'shortAnswerPrompt',
+  BOX_SELECT_PROMPT: 'boxSelectPrompt',
   AUTO_MODE: 'autoMode',
+  SHOW_FLOATING_WIDGET: 'showFloatingWidget',
   DEBUG_MODAL_POS: 'debugModalPos',
   AI_CACHE: 'ai_cache'
 };

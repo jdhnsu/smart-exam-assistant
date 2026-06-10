@@ -367,16 +367,44 @@ EA.BoxSelect = {
 
   _sendToAIAndShow: function (data) {
     var self = this;
-
-    EA.UI.createDebugModalLive('Box Selection Result', data).then(function (live) {
-      EA.Utils.fetchSingleAnswer(data).then(function (answer) {
-        live.updateAnswer(answer);
-      }).catch(function (err) {
-        live.updateAnswer('');
-        if (err && err !== 'Unknown error') {
-          self._showStatus('AI error: ' + err);
-        }
-      });
+    
+    // 标记来源为 box-select
+    data.source = 'box-select';
+    
+    // 创建简洁的问答弹窗
+    EA.UI.createSimpleAnswerModal('Box Selection Result', data);
+    
+    // 发送 AI 请求
+    EA.Utils.fetchSingleAnswer(data).then(function (answer) {
+      // 直接在弹窗中显示 AI 的原始回答
+      self._displayAnswer(answer);
+    }).catch(function (err) {
+      self._displayError(err);
     });
+  },
+
+  _displayAnswer: function (answer) {
+    var answerEl = document.querySelector('#ea-simple-answer-text');
+    if (answerEl) {
+      // 移除加载动画
+      var loadingEl = document.querySelector('#ea-simple-loading');
+      if (loadingEl) loadingEl.style.display = 'none';
+      
+      // 显示答案
+      answerEl.textContent = answer || 'No answer from AI';
+      answerEl.style.display = 'block';
+    }
+  },
+
+  _displayError: function (err) {
+    var answerEl = document.querySelector('#ea-simple-answer-text');
+    if (answerEl) {
+      var loadingEl = document.querySelector('#ea-simple-loading');
+      if (loadingEl) loadingEl.style.display = 'none';
+      
+      answerEl.textContent = 'Error: ' + (err && err.message ? err.message : err);
+      answerEl.style.color = '#f56c6c';
+      answerEl.style.display = 'block';
+    }
   }
 };

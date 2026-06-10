@@ -26,7 +26,8 @@ async function resolveSettings() {
     EA.StorageKeys.API_KEY,
     EA.StorageKeys.API_URL,
     EA.StorageKeys.MODEL_NAME,
-    EA.StorageKeys.SHORT_ANSWER_PROMPT
+    EA.StorageKeys.SHORT_ANSWER_PROMPT,
+    EA.StorageKeys.BOX_SELECT_PROMPT
   ]);
 
   if (!settings[EA.StorageKeys.API_KEY]) {
@@ -38,6 +39,7 @@ async function resolveSettings() {
   var apiUrl = settings[EA.StorageKeys.API_URL] || '';
   var modelName = settings[EA.StorageKeys.MODEL_NAME] || '';
   var shortPrompt = settings[EA.StorageKeys.SHORT_ANSWER_PROMPT] || '';
+  var boxSelectPrompt = settings[EA.StorageKeys.BOX_SELECT_PROMPT] || '';
 
   var callFn = EA.Providers.get(provider);
   if (!callFn) {
@@ -51,18 +53,35 @@ async function resolveSettings() {
           EA.Defaults.GLM_MODEL;
   var model = modelName || defaultModel;
 
-  return { apiKey: apiKey, apiUrl: apiUrl, model: model, callFn: callFn, shortPrompt: shortPrompt };
+  return { 
+    apiKey: apiKey, 
+    apiUrl: apiUrl, 
+    model: model, 
+    callFn: callFn, 
+    shortPrompt: shortPrompt,
+    boxSelectPrompt: boxSelectPrompt
+  };
 }
 
 async function handleAIRequest(questionData, sendResponse) {
   try {
     var resolved = await resolveSettings();
 
-    var prompt = EA.Prompt.create(questionData, resolved.shortPrompt);
+    // 根据来源选择提示词
+    var customPrompt = questionData.source === 'box-select' 
+      ? resolved.boxSelectPrompt 
+      : resolved.shortPrompt;
+    
+    // 传递 options 参数，包含来源标识
+    var prompt = EA.Prompt.create(questionData, customPrompt, { source: questionData.source });
     var answer = await resolved.callFn(resolved.apiKey, resolved.model, prompt, resolved.apiUrl);
-    var cleanAnswer = EA.AnswerCleaner.clean(answer, questionData.type);
+    
+    // ALT+Q 模式保留原始回答，其他模式使用清理后的答案
+    var finalAnswer = questionData.source === 'box-select' 
+      ? answer 
+      : EA.AnswerCleaner.clean(answer, questionData.type);
 
-    sendResponse({ answer: cleanAnswer });
+    sendResponse({ answer: finalAnswer });
   } catch (error) {
     console.error('[EA] AI Request Failed:', error);
     sendResponse({ error: error.message });
